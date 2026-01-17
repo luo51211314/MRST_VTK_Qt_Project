@@ -1,0 +1,27 @@
+# Qt编译垃圾
+*.pro.user
+*.pro.user.*
+*.qmake.stash
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+CMakeLists.txt.user*
+build*/
+debug/
+release/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# VTK相关
+*.vtk~
+*.pvsm
+*.vtp~
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+*.tmp
