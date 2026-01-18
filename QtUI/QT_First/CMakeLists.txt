@@ -19,6 +19,7 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        resources.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -33,6 +34,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         backstagedialog.h backstagedialog.cpp
         ribbonbar.h ribbonbar.cpp
         paramdialog.h paramdialog.cpp
+        resources.qrc
 
 
     )

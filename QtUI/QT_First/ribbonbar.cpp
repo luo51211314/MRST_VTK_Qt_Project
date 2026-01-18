@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QFrame>
 #include <QStyle>
+#include <QMessageBox>
 
 RibbonBar::RibbonBar(QWidget* parent)
     : QWidget(parent)
@@ -25,6 +26,14 @@ void RibbonBar::setFileMode(bool on)
     if (fileQuickBar) fileQuickBar->setVisible(on);
     if (pages)        pages->setVisible(!on);
 }
+
+static QIcon rIcon(const char* name)
+{
+    // 你的 qrc: prefix=/icons, file=icons/xxx.svg
+    // 所以路径是 :/icons/icons/xxx.svg
+    return QIcon(QString(":/icons/icons/%1").arg(name));
+}
+
 
 void RibbonBar::buildUi()
 {
@@ -139,6 +148,7 @@ void RibbonBar::buildUi()
             border-top: 1px solid #d0d0d0;
         }
     )");
+
 }
 
 
@@ -164,16 +174,20 @@ static QToolButton* makeRibbonBtn(QWidget* parent,
 
 QWidget* RibbonBar::buildRibbonPage(const QString& key)
 {
+    qDebug() << "[RibbonBar] buildRibbonPage key=" << key;
+
     // 用 style() 没问题（RibbonBar 继承 QWidget），但我建议取一次避免重复调用
     QStyle* st = this->style();
 
-    // ===== 标准图标（第二步）=====
-    const QIcon icoNew    = st->standardIcon(QStyle::SP_FileIcon);
-    const QIcon icoOpen   = st->standardIcon(QStyle::SP_DialogOpenButton);
-    const QIcon icoSave   = st->standardIcon(QStyle::SP_DialogSaveButton);
-    const QIcon icoClose  = st->standardIcon(QStyle::SP_DialogCloseButton);
-    const QIcon icoImport = st->standardIcon(QStyle::SP_ArrowDown);
-    const QIcon icoExport = st->standardIcon(QStyle::SP_ArrowUp);
+
+    // ===== 你的资源 SVG 图标（从 qrc 读取）=====
+    const QIcon icoNew    = rIcon("file_new.svg");
+    const QIcon icoOpen   = rIcon("file_open.svg");
+    const QIcon icoSave   = rIcon("file_save.svg");
+    const QIcon icoClose  = rIcon("file_close.svg");
+    const QIcon icoImport = rIcon("import.svg");
+    const QIcon icoExport = rIcon("export.svg");
+
 
     // ===== 给“点/线/场/图/井位/曲线”准备图标 =====
     // 这些是 Qt 自带的标准图标里“相对合适”的占位；后面你想更像工程软件，我们再换成统一 SVG
@@ -304,8 +318,9 @@ void RibbonBar::buildFileQuickBar()
     lay->setContentsMargins(10, 6, 10, 6);
     lay->setSpacing(10);
 
-    auto makeBtn = [&](const QString& text){
+    auto makeBtn = [&](const QIcon& icon, const QString& text){
         auto* b = new QToolButton(fileQuickBar);
+        b->setIcon(icon);
         b->setText(text);
         b->setAutoRaise(true);
         b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
@@ -314,11 +329,13 @@ void RibbonBar::buildFileQuickBar()
         return b;
     };
 
-    lay->addWidget(makeBtn(tr("新建")));
-    lay->addWidget(makeBtn(tr("打开")));
-    lay->addWidget(makeBtn(tr("保存")));
-    lay->addWidget(makeBtn(tr("打印")));
-    lay->addWidget(makeBtn(tr("关闭")));
+
+    lay->addWidget(makeBtn(rIcon("file_new.svg"),   tr("新建")));
+    lay->addWidget(makeBtn(rIcon("file_open.svg"),  tr("打开")));
+    lay->addWidget(makeBtn(rIcon("file_save.svg"),  tr("保存")));
+    lay->addWidget(makeBtn(QIcon(),                 tr("打印"))); // 你还没打印图标就先空着
+    lay->addWidget(makeBtn(rIcon("file_close.svg"), tr("关闭")));
+
     lay->addStretch();
 
     fileQuickBar->setStyleSheet(R"(
