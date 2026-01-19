@@ -25,6 +25,8 @@ signals:
     void fileClicked();                 // 点击左上角“文件”
     void tabChanged(int index);         // Tab 切换（如果你后续要联动）
     void importParamsRequested();   // 点击“导入”时发出
+    void newProjectRequested();         //新建
+    void openProjectRequested();        //打开
 
 private:
     void buildUi();

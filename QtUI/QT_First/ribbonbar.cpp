@@ -14,6 +14,14 @@ RibbonBar::RibbonBar(QWidget* parent)
     : QWidget(parent)
 {
     buildUi();
+
+    // ===== Compass 风格：Ribbon 背景灰 =====
+    setStyleSheet(R"(
+        RibbonBar {
+            background: #f2f2f2;
+            border-bottom: 1px solid #d0d0d0;
+        }
+    )");
 }
 
 QToolButton* RibbonBar::fileButton() const
@@ -82,7 +90,7 @@ void RibbonBar::buildUi()
     // ===== 第二行：pages =====
     pages = new QStackedWidget(this);
     pages->setObjectName("ribbonPages");
-    pages->setFixedHeight(110);
+    pages->setFixedHeight(100);
 
     pages->addWidget(buildRibbonPage("DATA"));
     pages->addWidget(buildRibbonPage("GEO"));
@@ -164,11 +172,27 @@ static QToolButton* makeRibbonBtn(QWidget* parent,
 
     b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     b->setIconSize(QSize(24, 24));   // 你 pages 高度 95，这里 24 更协调
-    b->setFixedSize(68, 60);         // 统一按钮大小
+    b->setFixedSize(60, 56);         // 统一按钮大小
     b->setAutoRaise(true);
     b->setFocusPolicy(Qt::NoFocus);
 
     return b;
+    b->setStyleSheet(R"(
+    QToolButton{
+        padding: 2px 4px;
+        margin: 0px;
+        border: 1px solid transparent;
+        border-radius: 5px;
+    }
+    QToolButton:hover{
+        background:#F3F6FB;
+        border-color:#C9D6EA;
+    }
+    QToolButton:pressed{
+        background:#E7EEF9;
+    }
+    )");
+
 }
 
 
@@ -203,20 +227,41 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
     page->setObjectName("page_" + key);
 
     auto* pageLay = new QHBoxLayout(page);
-    pageLay->setContentsMargins(10, 8, 10, 8);
-    pageLay->setSpacing(10);
+    pageLay->setContentsMargins(6, 6, 6, 6);
+    pageLay->setSpacing(6);
+
+    auto makeVLine = [&](QWidget* parent)->QWidget*
+    {
+        QWidget* box = new QWidget(parent);
+        auto* lay = new QVBoxLayout(box);
+        lay->setContentsMargins(0,0,0,0);
+        lay->addStretch();
+
+        auto* line = new QFrame(box);
+        line->setFrameShape(QFrame::VLine);
+        line->setLineWidth(1);
+        line->setStyleSheet("color:#D6DCE6;");
+        line->setFixedHeight(86);
+
+        lay->addWidget(line);
+        lay->addStretch();
+        return box;
+    };
+
 
     auto makeGroup = [&](const QString& title, const QStringList& buttons)->QWidget*
+
+
     {
         QWidget* group = new QWidget(page);
         auto* v = new QVBoxLayout(group);
-        v->setContentsMargins(8, 6, 8, 4);
-        v->setSpacing(4);
+        v->setContentsMargins(6, 4, 6, 4);
+        v->setSpacing(2);
 
         QWidget* btnArea = new QWidget(group);
         auto* h = new QHBoxLayout(btnArea);
         h->setContentsMargins(0,0,0,0);
-        h->setSpacing(8);
+        h->setSpacing(3);
 
         // ✅ iconFor 放到循环外，只定义一次
         auto iconFor = [&](const QString& groupTitle, const QString& text)->QIcon
@@ -265,6 +310,13 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
             if (title == tr("工区") && text == tr("导入")) {
                 connect(b, &QToolButton::clicked, this, &RibbonBar::importParamsRequested);
             }
+            if (title == tr("工区") && text == tr("新建")) {
+                connect(b, &QToolButton::clicked, this, &RibbonBar::newProjectRequested);
+            }
+            if (title == tr("工区") && text == tr("打开")) {
+                connect(b, &QToolButton::clicked, this, &RibbonBar::openProjectRequested);
+            }
+
 
             h->addWidget(b);
         }
@@ -273,7 +325,9 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
 
         auto* lbl = new QLabel(title, group);
         lbl->setAlignment(Qt::AlignHCenter);
-        lbl->setStyleSheet("color:#666; font-size:12px; padding-top:2px;");
+        lbl->setFixedHeight(16);
+        lbl->setStyleSheet("color:#4A5568; font-size:12px; padding:0px; margin:0px;");
+
 
         v->addWidget(btnArea);
         v->addWidget(lbl);
@@ -284,10 +338,12 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
         pageLay->addWidget(makeGroup(tr("工区"),
                                      {tr("新建"), tr("打开"), tr("保存"),
                                       tr("关闭"), tr("导入"), tr("导出")}));
+        pageLay->addWidget(makeVLine(page));
 
         pageLay->addWidget(makeGroup(tr("数据导入"),
                                      {tr("点数据"), tr("线数据"), tr("场数据"),
                                       tr("图文件"), tr("井位"), tr("曲线")}));
+        pageLay->addWidget(makeVLine(page));
 
         pageLay->addWidget(makeGroup(tr("数据导出"),
                                      {tr("点数据"), tr("线数据"), tr("场数据"),
@@ -302,9 +358,26 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
 
     // 给 page 里的按钮一个统一 hover（你原来只给 fileQuickBar 写了 hover）
     page->setStyleSheet(R"(
-        QToolButton:hover { background:#eef4ff; border-radius:6px; }
-        QToolButton:pressed { background:#dbe9ff; border-radius:6px; }
+        QWidget[ribbonGroup="true"]{
+            border: 1px solid #E3E8F0;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.65);
+        }
+        QToolButton{
+            padding: 2px 4px;
+            margin: 0px;
+            border: 1px solid transparent;
+            border-radius: 5px;
+        }
+        QToolButton:hover{
+            background:#F3F6FB;
+            border-color:#C9D6EA;
+        }
+        QToolButton:pressed{
+            background:#E7EEF9;
+        }
     )");
+
 
     return page;
 }

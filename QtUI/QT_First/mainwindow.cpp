@@ -44,6 +44,8 @@ MainWindow::MainWindow(QWidget *parent)
     initBottomDock();    // 底部日志
     initConnections();  // 所有信号-槽集中在这里
 
+    resizeDocks({dockLayers, dockProps}, {190, 170}, Qt::Horizontal);
+
     log("Ready.");
 }
 
@@ -60,18 +62,47 @@ void MainWindow::initRibbon()
 
 void MainWindow::initCenter()
 {
-    // 中间先放一个占位，后面你再换成绘图区/表格/图形视图都行
-    auto *center = new QLabel(tr("中央工作区"));
-    center->setAlignment(Qt::AlignCenter);
-    center->setStyleSheet("background:#ffffff; border:1px solid #ddd; border-radius:8px;");
-    setCentralWidget(center);
+    // 外层：工作区背景（灰色）
+    QWidget* workspaceBg = new QWidget(this);
+    workspaceBg->setObjectName("workspaceBg");
+
+    // 内层布局
+    auto* lay = new QVBoxLayout(workspaceBg);
+    lay->setContentsMargins(20, 20, 20, 20);  // ⭐ Compass 风格：留白
+    lay->setSpacing(0);
+
+    // 里面真正的工作区（现在先是占位）
+    QLabel* workArea = new QLabel(tr("中央工作区"), workspaceBg);
+    workArea->setAlignment(Qt::AlignCenter);
+    workArea->setObjectName("workArea");
+
+    lay->addWidget(workArea, 1);
+
+    setCentralWidget(workspaceBg);
+
+    // 样式
+    workspaceBg->setStyleSheet(R"(
+        QWidget#workspaceBg {
+            background: #f2f2f2;   /* Compass 灰 */
+        }
+        QLabel#workArea {
+            background: white;
+            border: 1px solid #d6d6d6;
+            border-radius: 6px;
+            color: #666;
+            font-size: 14px;
+        }
+    )");
 }
+
 
 void MainWindow::initLeftDock()
 {
     // ========== A. 左侧第 1 栏：数据/数模 ==========
-    dockData = new QDockWidget(tr("数模"), this);
+    dockData = new QDockWidget(this);
     dockData->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+
 
     dataPanel = new DataPanel(dockData);
     dockData->setWidget(dataPanel);
@@ -93,7 +124,7 @@ void MainWindow::initLeftDock()
     splitDockWidget(dockData, dockFlow, Qt::Horizontal);
 
     // ========== D. 调整两栏宽度比例（数模:流程 = 2:3，可按你喜好改） ==========
-    resizeDocks({dockData, dockFlow}, {150, 150}, Qt::Horizontal);
+    resizeDocks({dockData, dockFlow}, {200, 150}, Qt::Horizontal);
 }
 
 
@@ -130,6 +161,8 @@ void MainWindow::initBottomDock()
     dockLog->setWidget(logPanel);
 
     addDockWidget(Qt::BottomDockWidgetArea, dockLog);
+    resizeDocks({dockLog}, {120}, Qt::Vertical);
+
 }
 
 void MainWindow::initConnections()
@@ -142,6 +175,13 @@ void MainWindow::initConnections()
     // Ribbon “导入” -> 弹参数窗并保存 CSV
     connect(ribbonBar, &RibbonBar::importParamsRequested,
             this, &MainWindow::onImportParams);
+    connect(ribbonBar, &RibbonBar::newProjectRequested,
+            this, &MainWindow::onNewProject);
+
+    connect(ribbonBar, &RibbonBar::openProjectRequested,
+            this, &MainWindow::onOpenProject);
+
+
 
 }
 

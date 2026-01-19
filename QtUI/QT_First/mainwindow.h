@@ -90,6 +90,9 @@ private:
 
     // 点击导入弹窗
     void onImportParams();
+    // 点击新建和打开
+    void onNewWorkArea();
+    void onOpenWorkArea();
 
 
 
