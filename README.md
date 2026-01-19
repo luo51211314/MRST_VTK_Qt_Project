@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/24714736/README.md)
 ========================================
 Overlay Viewer（3D 场景交互版）
 裂缝 · 压力场 · Pick · HUD · 框选 · 相机锁定
