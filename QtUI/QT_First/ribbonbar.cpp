@@ -15,13 +15,6 @@ RibbonBar::RibbonBar(QWidget* parent)
 {
     buildUi();
 
-    // ===== Compass 风格：Ribbon 背景灰 =====
-    setStyleSheet(R"(
-        RibbonBar {
-            background: #f2f2f2;
-            border-bottom: 1px solid #d0d0d0;
-        }
-    )");
 }
 
 QToolButton* RibbonBar::fileButton() const
@@ -31,8 +24,10 @@ QToolButton* RibbonBar::fileButton() const
 
 void RibbonBar::setFileMode(bool on)
 {
+
     if (fileQuickBar) fileQuickBar->setVisible(on);
     if (pages)        pages->setVisible(!on);
+
 }
 
 static QIcon rIcon(const char* name)
@@ -64,6 +59,9 @@ void RibbonBar::buildUi()
     btnFile = new QToolButton(topBar);
     btnFile->setObjectName("btnFile");
     btnFile->setText(tr("文件"));
+
+
+
     btnFile->setPopupMode(QToolButton::InstantPopup);
     btnFile->setMenu(nullptr);
 
@@ -111,27 +109,58 @@ void RibbonBar::buildUi()
     rootLay->addWidget(pages);
 
     // tab 切换 -> page 切换
-    connect(tabs, &QTabBar::currentChanged, pages, &QStackedWidget::setCurrentIndex);
-    connect(tabs, &QTabBar::currentChanged, this, &RibbonBar::tabChanged);
+    // 文件按钮点击 -> 切换文件模式
+    connect(btnFile, &QToolButton::clicked, this, [this](){
+        setFileMode(!btnFile->isChecked());
+        emit fileClicked();
+    });
+
+    // tab 切换 -> page 切换 + 退出文件模式
+    connect(tabs, &QTabBar::currentChanged, this, [this](int idx){
+        setFileMode(false);
+        pages->setCurrentIndex(idx);
+        emit tabChanged(idx);
+    });
+
 
     tabs->setCurrentIndex(0);
     pages->setCurrentIndex(0);
+    setFileMode(false);
+
 
     // 文件按钮点击 -> 发信号给 MainWindow
-    connect(btnFile, &QToolButton::clicked, this, &RibbonBar::fileClicked);
+    //connect(btnFile, &QToolButton::clicked, this, &RibbonBar::fileClicked);
 
     // 样式（基本沿用你原来的）
     setStyleSheet(R"(
         QWidget#ribbonRoot { background: #f3f3f3; }
         QWidget#topBar { background: #f3f3f3; }
 
+        /* ✅ 文件按钮：默认普通 */
         QToolButton#btnFile {
+            height: 30px;                 /* 和 tab 高度一致 */
+            padding: 0px 14px;            /* 和 tab 一致 */
+            margin: 0px 6px;              /* 和 tab 一致 */
+            background: transparent;
+            border: none;
+            color: #222;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+
+        /* hover：轻微底色（不要像按钮那样一整块） */
+        QToolButton#btnFile:hover {
+            background: rgba(255,255,255,0.55);
+        }
+
+        /* 选中：完全复刻 QTabBar::tab:selected */
+        QToolButton#btnFile:checked {
             background: #1f5fbf;
             color: white;
-            border: 0px;
-            padding: 6px 10px;
-            border-radius: 4px;
+            border: 1px solid #1f5fbf;
+            border-bottom: 0px;
         }
+
         QToolButton#btnFile::menu-indicator { image: none; }
 
         QTabBar::tab {
@@ -156,6 +185,7 @@ void RibbonBar::buildUi()
             border-top: 1px solid #d0d0d0;
         }
     )");
+
 
 }
 
