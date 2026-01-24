@@ -35,6 +35,21 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ribbonbar.h ribbonbar.cpp
         paramdialog.h paramdialog.cpp
         resources.qrc
+        mock/mockalgo.cpp mock/mockalgo.h
+        mock/SimCallbackBridge.cpp mock/SimCallbackBridge.h
+        gridparamdialog.h gridparamdialog.cpp
+        fluidparamdialog.h fluidparamdialog.cpp
+        simparamdialog.h simparamdialog.cpp
+        gridparamdialog.h gridparamdialog.cpp
+        fluidparamdialog.h fluidparamdialog.cpp
+        simparamdialog.h simparamdialog.cpp
+        mock/algo_adapter.cpp mock/algo_adapter.h
+        mock/algo_adapter.h
+        mock/algo_adapter.cpp
+        vtk/VtkAdapter.cpp vtk/VtkAdapter.h vtk/VtkViewHost.h
+
+
+
 
 
     )
@@ -55,6 +70,12 @@ else()
         )
     endif()
 endif()
+
+
+# ===== 引入团队的 Common 接口头文件目录 =====
+target_include_directories(QT_First PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Common
+)
 
 target_link_libraries(QT_First PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
 

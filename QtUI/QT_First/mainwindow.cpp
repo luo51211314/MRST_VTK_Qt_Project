@@ -8,7 +8,6 @@
 #include <QTableWidget>
 #include <QPlainTextEdit>
 #include <QHeaderView>
-#include <QLabel>
 #include <QToolButton>
 #include <QMenu>
 #include <QWidgetAction>
@@ -17,7 +16,6 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QToolButton>
 #include <QFrame>
 #include <QSizePolicy>
 #include <QDialog>
@@ -27,6 +25,17 @@
 #include <QFile>
 #include <QTextStream>
 #include <QMessageBox>
+#include <QStatusBar>
+#include "gridparamdialog.h"
+#include "fluidparamdialog.h"
+#include "simparamdialog.h"
+#include "mock/algo_adapter.h"
+#include "vtk/VtkViewHost.h"
+#include "vtk/VtkAdapter.h"
+
+
+
+
 
 
 
@@ -44,9 +53,80 @@ MainWindow::MainWindow(QWidget *parent)
     initBottomDock();    // 底部日志
     initConnections();  // 所有信号-槽集中在这里
 
+    // ===== VTK 适配器（Qt 侧接入点）=====
+    vtkAdapter_ = new VtkAdapter(vtkHost_, this);
+    connect(vtkAdapter_, &VtkAdapter::sigLog, this, &MainWindow::log);
+    vtkAdapter_->initRemoteStream();
+
     resizeDocks({dockLayers, dockProps}, {190, 170}, Qt::Horizontal);
 
     log("Ready.");
+
+    // ===== 创建回调桥（必须先 new）=====
+    callbackBridge_ = new SimCallbackBridge(this);
+
+
+    // ===== 仿真 mock 初始化（保留）=====
+    auto* algo = new AlgoAdapter();
+    algo->setCallback(callbackBridge_);
+
+    simulator_ = algo;
+    dataTransfer_ = algo;
+
+    // ===== 回调：写到消息输出（logPanel）=====
+    connect(callbackBridge_, &SimCallbackBridge::sigProgress,
+            this, [=](double p, double t){
+                // 1) 更新进度条
+                if (simProgressBar_) {
+                    int v = qBound(0, int(p * 100.0 + 0.5), 100);
+                    simProgressBar_->setValue(v);
+                }
+
+                // 2) 更新时间显示（你现在的 t 是“模拟时间”，单位你可按需要写 d/秒）
+                if (simTimeLabel_) {
+                    simTimeLabel_->setText(QString("Time: %1").arg(t, 0, 'f', 2));
+                }
+            });
+
+
+    connect(callbackBridge_, &SimCallbackBridge::sigCompleted,
+            this, [=](){
+                log("Simulation completed.");
+                simState_ = SimState::Completed;
+                if (simProgressBar_) simProgressBar_->setValue(100);
+                updateSimUi();
+            });
+    connect(callbackBridge_, &SimCallbackBridge::sigFailed,
+            this, [=](const QString& msg){
+                log("Simulation failed: " + msg);
+                simState_ = SimState::Failed;
+                if (simProgressBar_) simProgressBar_->setValue(0);
+                updateSimUi();
+            });
+
+    // ===== 状态栏：进度条 + 时间显示 =====
+    simProgressBar_ = new QProgressBar(this);
+    simProgressBar_->setRange(0, 100);
+    simProgressBar_->setValue(0);
+    simProgressBar_->setTextVisible(true);
+    simProgressBar_->setFixedWidth(220);
+
+    simTimeLabel_ = new QLabel("Time: 0.00", this);
+    simTimeLabel_->setMinimumWidth(120);
+
+    // 注意：QMainWindow 自带 statusBar()
+    statusBar()->addPermanentWidget(simTimeLabel_);
+    statusBar()->addPermanentWidget(simProgressBar_);
+
+
+
+
+
+
+
+
+
+
 }
 
 MainWindow::~MainWindow() {}
@@ -62,38 +142,28 @@ void MainWindow::initRibbon()
 
 void MainWindow::initCenter()
 {
-    // 外层：工作区背景（灰色）
     QWidget* workspaceBg = new QWidget(this);
     workspaceBg->setObjectName("workspaceBg");
 
-    // 内层布局
     auto* lay = new QVBoxLayout(workspaceBg);
-    lay->setContentsMargins(20, 20, 20, 20);  // ⭐ Compass 风格：留白
+    lay->setContentsMargins(20, 20, 20, 20);
     lay->setSpacing(0);
 
-    // 里面真正的工作区（现在先是占位）
-    QLabel* workArea = new QLabel(tr("中央工作区"), workspaceBg);
-    workArea->setAlignment(Qt::AlignCenter);
-    workArea->setObjectName("workArea");
-
-    lay->addWidget(workArea, 1);
+    // ✅ 用封装好的 VtkViewHost（替代 renderHost_/layout/placeholder）
+    vtkHost_ = new VtkViewHost(workspaceBg);
+    lay->addWidget(vtkHost_, 1);
 
     setCentralWidget(workspaceBg);
 
-    // 样式
     workspaceBg->setStyleSheet(R"(
-        QWidget#workspaceBg {
-            background: #f2f2f2;   /* Compass 灰 */
-        }
-        QLabel#workArea {
-            background: white;
-            border: 1px solid #d6d6d6;
-            border-radius: 6px;
-            color: #666;
-            font-size: 14px;
-        }
+        QWidget#workspaceBg { background: #f2f2f2; }
     )");
 }
+
+
+
+
+
 
 
 void MainWindow::initLeftDock()
@@ -180,6 +250,67 @@ void MainWindow::initConnections()
 
     connect(ribbonBar, &RibbonBar::openProjectRequested,
             this, &MainWindow::onOpenProject);
+
+    // ===== 数值模拟：仿真控制按钮 =====
+    connect(ribbonBar, &RibbonBar::startSimulationRequested,
+            this, &MainWindow::onStartSimulation);
+
+    connect(ribbonBar, &RibbonBar::pauseSimulationRequested,
+            this, &MainWindow::onPauseSimulation);
+
+    connect(ribbonBar, &RibbonBar::stopSimulationRequested,
+            this, &MainWindow::onStopSimulation);
+
+    connect(ribbonBar, &RibbonBar::resetSimulationRequested,
+            this, &MainWindow::onResetSimulation);
+
+    connect(ribbonBar, &RibbonBar::gridParamsRequested,
+            this, &MainWindow::onGridParams);
+
+    connect(ribbonBar, &RibbonBar::fluidParamsRequested,
+            this, &MainWindow::onFluidParams);
+
+    connect(ribbonBar, &RibbonBar::simParamsRequested,
+            this, &MainWindow::onSimParams);
+
+    // ===== 三维分析：远程渲染模拟 =====
+    connect(ribbonBar, &RibbonBar::startRemoteRenderMockRequested, this, [this](){
+        if (!vtkAdapter_) return;
+        vtkAdapter_->startMockStream(30);
+        log("[UI] 开始远程渲染模拟");
+    });
+
+    connect(ribbonBar, &RibbonBar::stopRemoteRenderMockRequested, this, [this](){
+        if (!vtkAdapter_) return;
+        vtkAdapter_->stopMockStream();
+        log("[UI] 停止远程渲染模拟");
+    });
+
+    // ===== 预留：后续真实远程渲染接入 =====
+    connect(ribbonBar, &RibbonBar::setRemoteRenderFpsRequested, this, [this](int fps){
+        if (!vtkAdapter_) return;
+        vtkAdapter_->startMockStream(fps);   // 现在先用 mock 复用
+        log(QString("[UI] 设置远程渲染 FPS = %1").arg(fps));
+    });
+
+    connect(ribbonBar, &RibbonBar::connectRemoteRenderRequested, this, [this](){
+        log("[UI] 连接远程渲染（预留）");
+    });
+
+    connect(ribbonBar, &RibbonBar::disconnectRemoteRenderRequested, this, [this](){
+        log("[UI] 断开远程渲染（预留）");
+    });
+
+    connect(ribbonBar, &RibbonBar::screenshotRemoteRenderRequested, this, [this](){
+        log("[UI] 截图（预留）");
+    });
+
+    connect(ribbonBar, &RibbonBar::recordRemoteRenderRequested, this, [this](){
+        log("[UI] 录屏（预留）");
+    });
+
+
+
 
 
 
@@ -346,9 +477,107 @@ void MainWindow::onImportParams()
     log(QString("参数已保存为 CSV：%1").arg(path));
 }
 
+void MainWindow::onStartSimulation()
+{
+    if (!simulator_) return;
+
+    // 开始/继续二合一
+    if (simState_ == SimState::Paused) {
+        log("继续仿真");
+        simulator_->resumeSimulation();
+        simState_ = SimState::Running;
+    } else {
+        log("开始仿真");
+        simulator_->runSimulation();
+        simState_ = SimState::Running;
+    }
+    updateSimUi();
+}
+
+void MainWindow::onPauseSimulation()
+{
+    if (!simulator_) return;
+
+    // 只有 Running 才允许暂停
+    if (simState_ == SimState::Running) {
+        log("暂停仿真");
+        simulator_->pauseSimulation();
+        simState_ = SimState::Paused;
+        updateSimUi();
+    }
+}
+
+void MainWindow::onStopSimulation()
+{
+    if (!simulator_) return;
+
+    log("停止仿真");
+    simulator_->stopSimulation();
+    if (simProgressBar_) simProgressBar_->setValue(0);
+    if (simTimeLabel_) simTimeLabel_->setText("Time: 0.00");
+    simState_ = SimState::Stopped;
+    updateSimUi();
+}
+
+void MainWindow::onResetSimulation()
+{
+    if (!simulator_) return;
+
+    log("重置仿真");
+    simulator_->stopSimulation();
+    if (simProgressBar_) simProgressBar_->setValue(0);
+    if (simTimeLabel_) simTimeLabel_->setText("Time: 0.00");
+    simState_ = SimState::Idle;
+    updateSimUi();
+}
 
 
+void MainWindow::updateSimUi()
+{
+    // 先用日志验证状态切换没问题，后面再去禁用按钮/改按钮文字
+    switch (simState_) {
+    case SimState::Idle:      log("[UI] SimState=Idle"); break;
+    case SimState::Running:   log("[UI] SimState=Running"); break;
+    case SimState::Paused:    log("[UI] SimState=Paused"); break;
+    case SimState::Stopped:   log("[UI] SimState=Stopped"); break;
+    case SimState::Completed: log("[UI] SimState=Completed"); break;
+    case SimState::Failed:    log("[UI] SimState=Failed"); break;
+    }
+}
 
+
+void MainWindow::onGridParams()
+{
+    if (!simulator_) return;
+    GridParamDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const auto p = dlg.params();
+    const bool ok = simulator_->initGrid(p);
+    log(ok ? "initGrid OK" : "initGrid FAILED");
+}
+
+void MainWindow::onFluidParams()
+{
+    if (!simulator_) return;
+    FluidParamDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const auto p = dlg.props();
+    const bool ok = simulator_->setFluidProperties(p);
+    log(ok ? "setFluidProperties OK" : "setFluidProperties FAILED");
+}
+
+void MainWindow::onSimParams()
+{
+    if (!simulator_) return;
+    SimParamDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const auto p = dlg.params();
+    const bool ok = simulator_->setSimulationParameters(p);
+    log(ok ? "setSimulationParameters OK" : "setSimulationParameters FAILED");
+}
 
 
 

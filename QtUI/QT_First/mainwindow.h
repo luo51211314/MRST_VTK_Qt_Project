@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QProgressBar>
 #include "logpanel.h"
 #include "layerpanel.h"
 #include "propertypanel.h"
@@ -17,6 +18,11 @@
 #include "backstagedialog.h"
 #include "ribbonbar.h"
 #include "paramdialog.h"
+#include "mock/mockalgo.h"
+#include "mock/SimCallbackBridge.h"
+#include "QtUItoAlgoInterface.h"
+
+
 
 
 
@@ -29,11 +35,15 @@ class QTableWidget;
 class QPlainTextEdit;
 class QAction;
 class QToolBar;
+class VtkViewHost;
+class VtkAdapter;
+
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
+
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
@@ -41,6 +51,7 @@ private slots:
     void onNewProject();
     void onOpenProject();
     void onLayerChanged();
+
 
 private:
     // 顶部：工具栏/按钮
@@ -84,6 +95,33 @@ private:
     QString lastProjectDir;
 
 
+    //仿真模拟
+    MockAlgo* mockAlgo_ = nullptr;
+    SimCallbackBridge* callbackBridge_ = nullptr;
+    QtUItoAlgo::ISimulatorController* simulator_ = nullptr;
+    QtUItoAlgo::IDataTransfer* dataTransfer_ = nullptr;
+
+    enum class SimState { Idle, Running, Paused, Stopped, Completed, Failed };
+    SimState simState_ = SimState::Idle;
+
+    //进度条
+    QProgressBar* simProgressBar_ = nullptr;
+    QLabel* simTimeLabel_ = nullptr;
+
+    VtkViewHost* vtkHost_ = nullptr;
+    VtkAdapter*  vtkAdapter_ = nullptr;
+
+
+
+
+
+
+
+
+    void onStartSimulation();
+    void onPauseSimulation();
+    void onStopSimulation();
+    void onResetSimulation();
     // ===== 顶部“文件快捷栏”（打开文件时显示）=====
     void showFileBackstage();
     void hideFileBackstage();
@@ -93,6 +131,14 @@ private:
     // 点击新建和打开
     void onNewWorkArea();
     void onOpenWorkArea();
+
+    void updateSimUi();
+
+    void onGridParams();
+    void onFluidParams();
+    void onSimParams();
+
+
 
 
 

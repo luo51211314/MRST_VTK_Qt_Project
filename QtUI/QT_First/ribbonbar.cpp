@@ -80,6 +80,7 @@ void RibbonBar::buildUi()
     tabs->addTab(tr("曲线分析"));
     tabs->addTab(tr("二维分析"));
     tabs->addTab(tr("三维分析"));
+    tabs->addTab(tr("远程渲染"));
     tabs->addTab(tr("工具/帮助"));
 
     topLay->addWidget(btnFile);
@@ -98,6 +99,7 @@ void RibbonBar::buildUi()
     pages->addWidget(buildRibbonPage("CURVE"));
     pages->addWidget(buildRibbonPage("2D"));
     pages->addWidget(buildRibbonPage("3D"));
+    pages->addWidget(buildRibbonPage("RR"));
     pages->addWidget(buildRibbonPage("TOOLS"));
 
     // 文件快捷栏（默认隐藏）
@@ -206,7 +208,7 @@ static QToolButton* makeRibbonBtn(QWidget* parent,
     b->setAutoRaise(true);
     b->setFocusPolicy(Qt::NoFocus);
 
-    return b;
+
     b->setStyleSheet(R"(
     QToolButton{
         padding: 2px 4px;
@@ -222,6 +224,7 @@ static QToolButton* makeRibbonBtn(QWidget* parent,
         background:#E7EEF9;
     }
     )");
+    return b;
 
 }
 
@@ -348,6 +351,76 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
             }
 
 
+            // ===== 数值模拟：仿真控制 =====
+            if (title == tr("仿真控制")) {
+                if (text == tr("开始")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::startSimulationRequested);
+                }
+                else if (text == tr("暂停")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::pauseSimulationRequested);
+                }
+                else if (text == tr("停止")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::stopSimulationRequested);
+                }
+                else if (text == tr("重置")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::resetSimulationRequested);
+                }
+            }
+
+            // ===== 数值模拟：仿真设置 =====
+            if (title == tr("仿真设置")) {
+                if (text == tr("网格设置")) {
+                    connect(b, &QToolButton::clicked, this, [this](){
+                        emit gridParamsRequested();
+                    });
+                } else if (text == tr("物性参数")) {
+                    connect(b, &QToolButton::clicked, this, [this](){
+                        emit fluidParamsRequested();
+                    });
+                } else if (text == tr("参数设置")) {
+                    connect(b, &QToolButton::clicked, this, [this](){
+                        emit simParamsRequested();
+                    });
+                }
+            }
+
+            // ===== 三维分析：远程渲染（统一成组）=====
+            if (title == tr("远程渲染")) {
+                if (text == tr("开始模拟")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::startRemoteRenderMockRequested);
+                }
+                else if (text == tr("停止模拟")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::stopRemoteRenderMockRequested);
+                }
+                else if (text == tr("连接")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::connectRemoteRenderRequested);
+                }
+                else if (text == tr("断开")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::disconnectRemoteRenderRequested);
+                }
+                else if (text == tr("截图")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::screenshotRemoteRenderRequested);
+                }
+                else if (text == tr("录屏")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::recordRemoteRenderRequested);
+                }
+                // FPS：先用三个按钮占位（15/30/60），后续也可以换成下拉框
+                else if (text == tr("FPS15")) {
+                    connect(b, &QToolButton::clicked, this, [this](){ emit setRemoteRenderFpsRequested(15); });
+                }
+                else if (text == tr("FPS30")) {
+                    connect(b, &QToolButton::clicked, this, [this](){ emit setRemoteRenderFpsRequested(30); });
+                }
+                else if (text == tr("FPS60")) {
+                    connect(b, &QToolButton::clicked, this, [this](){ emit setRemoteRenderFpsRequested(60); });
+                }
+            }
+
+
+
+
+
+
             h->addWidget(b);
         }
 
@@ -380,11 +453,47 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                                       tr("图文件"), tr("井位"), tr("曲线")}));
 
         pageLay->addStretch(1);
-    } else {
-        pageLay->addWidget(makeGroup(key, {tr("功能1"), tr("功能2"), tr("功能3"),
-                                           tr("功能4"), tr("功能5"), tr("功能6")}));
+    }  else if (key == "NUM") {
+
+        // ===== 仿真控制 =====
+        pageLay->addWidget(makeGroup(tr("仿真控制"),
+                                     {tr("开始"), tr("暂停"), tr("停止"), tr("重置")}));
+        pageLay->addWidget(makeVLine(page));
+
+        // ===== 仿真设置 =====
+        pageLay->addWidget(makeGroup(tr("仿真设置"),
+                                     {tr("参数设置"), tr("网格设置"), tr("物性参数")}));
+        pageLay->addWidget(makeVLine(page));
+
+        // ===== 结果与状态 =====
+        pageLay->addWidget(makeGroup(tr("结果与状态"),
+                                     {tr("进度"), tr("日志"), tr("导出结果")}));
+
         pageLay->addStretch(1);
-    }
+
+        } else if (key == "RR") {
+
+        // ✅ 远程渲染：独立成组（后续都往这组加）
+        pageLay->addWidget(makeGroup(tr("远程渲染"),
+                                     {tr("开始模拟"), tr("停止模拟"),
+                                      tr("连接"), tr("断开"),
+                                      tr("截图"), tr("录屏"),
+                                      tr("FPS15"), tr("FPS30"), tr("FPS60")}));
+        pageLay->addWidget(makeVLine(page));
+
+
+        pageLay->addStretch(1);
+
+        }else {
+            pageLay->addWidget(makeGroup(key,
+                                         {tr("功能1"), tr("功能2"), tr("功能3"),
+                                          tr("功能4"), tr("功能5"), tr("功能6")}));
+            pageLay->addStretch(1);
+        }
+
+
+
+
 
     // 给 page 里的按钮一个统一 hover（你原来只给 fileQuickBar 写了 hover）
     page->setStyleSheet(R"(

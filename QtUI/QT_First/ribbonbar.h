@@ -28,10 +28,34 @@ signals:
     void newProjectRequested();         //新建
     void openProjectRequested();        //打开
 
+    void startSimulationRequested();
+    void pauseSimulationRequested();
+    void stopSimulationRequested();
+    void resetSimulationRequested();
+
+    // ===== 数值模拟：参数设置 =====
+    void gridParamsRequested();
+    void fluidParamsRequested();
+    void simParamsRequested();
+
+    //远程渲染
+    void startRemoteRenderMockRequested();
+    void stopRemoteRenderMockRequested();
+    // 预留：后续远程渲染真实接入会用到
+    void connectRemoteRenderRequested();
+    void disconnectRemoteRenderRequested();
+    void screenshotRemoteRenderRequested();
+    void recordRemoteRenderRequested();
+    void setRemoteRenderFpsRequested(int fps);
+
+
+
 private:
     void buildUi();
     QWidget* buildRibbonPage(const QString& key);
     void buildFileQuickBar();
+
+
 
 private:
     QWidget* root = nullptr;            // 相当于你原来的 ribbonRoot
