@@ -2,6 +2,9 @@
 #include <QObject>
 #include <QImage>
 #include <QTimer>
+#include <QByteArray>
+
+
 
 class VtkViewHost;
 class QLabel;
@@ -21,6 +24,13 @@ public:
     // 真正远程接入时：Ubuntu 收到一帧图片，就调这个刷新
     void submitFrame(const QImage& img);
 
+    // 模拟：收到一帧网络数据（JPEG/PNG 字节），Qt 端解码后显示
+    void submitEncodedFrame(const QByteArray& bytes, const char* hintFormat = "JPG");
+
+
+protected:
+    bool eventFilter(QObject* obj, QEvent* ev) override;
+
 signals:
     void sigLog(const QString& msg);
 
@@ -35,4 +45,20 @@ private:
     QTimer       mockTimer_;
     QImage       lastFrame_;
     int          frameId_ = 0;
+
+    // 交互状态
+    bool   dragging_ = false;
+    bool   rightDragging_ = false;
+    QPoint lastPos_;
+
+    double yaw_ = 0.0;      // 旋转
+    double pitch_ = 0.0;
+    double zoom_ = 1.0;     // 缩放
+    double panX_ = 0.0;     // 平移（像素单位就行）
+    double panY_ = 0.0;
+
+    int    pickedId_ = -1;  // 模拟拾取结果
+
+    void renderOnce();
+
 };
