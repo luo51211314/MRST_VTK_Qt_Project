@@ -35,14 +35,15 @@ add_executable(overlay_viewer_brother
 
   src/fracture_select_effect.cpp
 
-  # 师兄 shared
-  ../combined_visualization/shared.cpp
+  ../render/shared.cpp
+  
+  src/ui_layer_button.cpp
+  
+  src/layer_ui.cpp
+
 )
 
-target_include_directories(overlay_viewer_brother PRIVATE
-  src
-  ../combined_visualization
-)
+target_include_directories(overlay_viewer_brother PRIVATE ../render)
 
 target_link_libraries(overlay_viewer_brother PRIVATE
   VTK::CommonCore

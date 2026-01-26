@@ -58,6 +58,12 @@ void FracturePickCallback::Execute(vtkObject* caller, unsigned long eventId, voi
     return;
   }
 
+// ✅ Fracture Layer OFF：禁止裂缝交互（Pick）
+if (FractureActor->GetPickable() == 0 || FractureActor->GetVisibility() == 0) {
+  ClearSelection(iren);   // 清高亮/HUD（符合你README）
+  return;
+}
+
   int* pos = iren->GetEventPosition();
   int x = pos[0], y = pos[1];
 

@@ -21,6 +21,12 @@ public:
     auto* iren = vtkRenderWindowInteractor::SafeDownCast(caller);
     if (!iren || !Effect || !Renderer || !FractureActor) return;
 
+// ✅ Fracture Layer OFF：Hover 禁用 + 立刻隐藏浮窗
+if (FractureActor->GetPickable() == 0 || FractureActor->GetVisibility() == 0) {
+  Effect->HideTooltip();
+  return;
+}
+
     int x = iren->GetEventPosition()[0];
     int y = iren->GetEventPosition()[1];
 
