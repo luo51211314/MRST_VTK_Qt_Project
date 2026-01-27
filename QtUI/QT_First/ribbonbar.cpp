@@ -381,6 +381,10 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                     connect(b, &QToolButton::clicked, this, [this](){
                         emit simParamsRequested();
                     });
+                } else if (text == tr("裂缝参数")) {
+                    connect(b, &QToolButton::clicked, this, [this](){
+                        emit fractureParamsRequested();
+                    });
                 }
             }
 
@@ -462,7 +466,7 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
 
         // ===== 仿真设置 =====
         pageLay->addWidget(makeGroup(tr("仿真设置"),
-                                     {tr("参数设置"), tr("网格设置"), tr("物性参数")}));
+                                     {tr("参数设置"), tr("网格设置"), tr("物性参数"),tr("裂缝参数")}));
         pageLay->addWidget(makeVLine(page));
 
         // ===== 结果与状态 =====

@@ -9,10 +9,10 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Svg)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Svg Concurrent)
 
 
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg Concurrent)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -42,11 +42,18 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         simparamdialog.h simparamdialog.cpp
         gridparamdialog.h gridparamdialog.cpp
         fluidparamdialog.h fluidparamdialog.cpp
-        simparamdialog.h simparamdialog.cpp
         mock/algo_adapter.cpp mock/algo_adapter.h
         mock/algo_adapter.h
         mock/algo_adapter.cpp
         vtk/VtkAdapter.cpp vtk/VtkAdapter.h vtk/VtkViewHost.h
+        fractureparamdialog.h fractureparamdialog.cpp
+
+        # ===== Algo sources (from ../../Algo) =====
+        ../../Algo/edfm_3d_blackoil_integrated_simulator.cpp
+        fractureparamdialog.h fractureparamdialog.cpp
+        #../../Algo/edfm_3d_blackoil.cpp
+        #../../Algo/edfm_3d_blackoil_lgr.cpp
+
 
 
 
@@ -75,9 +82,16 @@ endif()
 # ===== 引入团队的 Common 接口头文件目录 =====
 target_include_directories(QT_First PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Common
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Algo
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/mock
+    ${CMAKE_CURRENT_SOURCE_DIR}/vtk
+    ${CMAKE_CURRENT_SOURCE_DIR}/icons
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/eigen/eigen
 )
 
-target_link_libraries(QT_First PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg)
+target_link_libraries(QT_First PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg Qt${QT_VERSION_MAJOR}::Concurrent)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

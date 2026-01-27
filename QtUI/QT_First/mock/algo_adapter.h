@@ -3,7 +3,8 @@
 #include <string>
 
 #include "QtUItoAlgoInterface.h"
-#include "mockalgo.h"   // 先复用现有 MockAlgo（保证功能不掉）
+//#include "mockalgo.h"   // 先复用现有 MockAlgo（保证功能不掉）
+#include "edfm_3d_blackoil_integrated_simulator.h" // 真实 simulator 的头
 
 // AlgoAdapter：未来这里将调用真实算法模块；现在先“转发给 MockAlgo”
 class AlgoAdapter : public QtUItoAlgo::ISimulatorController,
@@ -39,5 +40,7 @@ public:
 
 private:
     // 当前阶段：复用 MockAlgo；后面换成真实 Algo 引擎即可
-    std::unique_ptr<MockAlgo> engine_;
+    //std::unique_ptr<MockAlgo> engine_;
+    std::unique_ptr<Simulator> engine_;
+
 };

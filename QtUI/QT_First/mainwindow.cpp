@@ -26,12 +26,15 @@
 #include <QTextStream>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QtConcurrent>
 #include "gridparamdialog.h"
 #include "fluidparamdialog.h"
 #include "simparamdialog.h"
-#include "mock/algo_adapter.h"
+#include "fractureparamdialog.h"
+#include "algo_adapter.h"
 #include "vtk/VtkViewHost.h"
 #include "vtk/VtkAdapter.h"
+
 
 
 
@@ -65,13 +68,16 @@ MainWindow::MainWindow(QWidget *parent)
     // ===== 创建回调桥（必须先 new）=====
     callbackBridge_ = new SimCallbackBridge(this);
 
-
-    // ===== 仿真 mock 初始化（保留）=====
+    // ===== Algo 初始化（当前是 Mock 引擎，未来可替换真实引擎）=====
     auto* algo = new AlgoAdapter();
-    algo->setCallback(callbackBridge_);
 
-    simulator_ = algo;
-    dataTransfer_ = algo;
+    // 关键：传入 ISimulationCallback*
+    algo->setCallback(static_cast<QtUItoAlgo::ISimulationCallback*>(callbackBridge_));
+
+    // 用接口指针持有（后续换真实算法无需改 UI）
+    simulator_    = static_cast<QtUItoAlgo::ISimulatorController*>(algo);
+    dataTransfer_ = static_cast<QtUItoAlgo::IDataTransfer*>(algo);
+
 
     // ===== 回调：写到消息输出（logPanel）=====
     connect(callbackBridge_, &SimCallbackBridge::sigProgress,
@@ -103,6 +109,11 @@ MainWindow::MainWindow(QWidget *parent)
                 if (simProgressBar_) simProgressBar_->setValue(0);
                 updateSimUi();
             });
+    connect(callbackBridge_, &SimCallbackBridge::sigTimeStep,
+            this, [=](double dt){
+                log(QString("TimeStep changed: %1").arg(dt, 0, 'f', 6));
+            });
+
 
     // ===== 状态栏：进度条 + 时间显示 =====
     simProgressBar_ = new QProgressBar(this);
@@ -250,6 +261,9 @@ void MainWindow::initConnections()
 
     connect(ribbonBar, &RibbonBar::openProjectRequested,
             this, &MainWindow::onOpenProject);
+    connect(ribbonBar, &RibbonBar::fractureParamsRequested,
+            this, &MainWindow::onFractureParams);
+
 
     // ===== 数值模拟：仿真控制按钮 =====
     connect(ribbonBar, &RibbonBar::startSimulationRequested,
@@ -481,17 +495,51 @@ void MainWindow::onStartSimulation()
 {
     if (!simulator_) return;
 
-    // 开始/继续二合一
+    // 继续：只在暂停状态下允许 resume
     if (simState_ == SimState::Paused) {
         log("继续仿真");
         simulator_->resumeSimulation();
         simState_ = SimState::Running;
-    } else {
-        log("开始仿真");
-        simulator_->runSimulation();
-        simState_ = SimState::Running;
+        updateSimUi();
+        return;
     }
+
+    // ===== 真实算法必需的前置参数检查 =====
+    if (!hasGrid_) {
+        QMessageBox::warning(this, "缺少参数", "请先设置网格参数（Grid Params）");
+        return;
+    }
+    if (!hasFluid_) {
+        QMessageBox::warning(this, "缺少参数", "请先设置流体参数（Fluid Params）");
+        return;
+    }
+    if (!hasSim_) {
+        QMessageBox::warning(this, "缺少参数", "请先设置模拟参数（Sim Params）");
+        return;
+    }
+    if (!hasFrac_) {
+        QMessageBox::warning(this, "缺少参数", "请先设置裂缝参数（仿真设置 → 裂缝参数）");
+        return;
+    }
+
+
+    // ✅ 如果你们真实算法要求必须有 fracture/well，也在这里加检查
+    // if (!hasFracture_) ...
+    // if (!hasWell_) ...
+
+    log("开始仿真（后台线程）");
+    simState_ = SimState::Running;
     updateSimUi();
+
+    // ===== 关键：后台线程跑，避免 UI 线程 abort/卡死 =====
+    QtConcurrent::run([this]{
+        bool ok = simulator_->runSimulation();
+        QMetaObject::invokeMethod(this, [this, ok]{
+            log(QString("runSimulation returned: %1").arg(ok));
+        }, Qt::QueuedConnection);
+    });
+
+
 }
 
 void MainWindow::onPauseSimulation()
@@ -552,8 +600,10 @@ void MainWindow::onGridParams()
     GridParamDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted) return;
 
-    const auto p = dlg.params();
-    const bool ok = simulator_->initGrid(p);
+    gridParams_ = dlg.params();
+    const bool ok = simulator_->initGrid(gridParams_);
+    hasGrid_ = ok;
+
     log(ok ? "initGrid OK" : "initGrid FAILED");
 }
 
@@ -563,8 +613,10 @@ void MainWindow::onFluidParams()
     FluidParamDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted) return;
 
-    const auto p = dlg.props();
-    const bool ok = simulator_->setFluidProperties(p);
+    fluidProps_ = dlg.props();
+    const bool ok = simulator_->setFluidProperties(fluidProps_);
+    hasFluid_ = ok;
+
     log(ok ? "setFluidProperties OK" : "setFluidProperties FAILED");
 }
 
@@ -574,9 +626,27 @@ void MainWindow::onSimParams()
     SimParamDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted) return;
 
-    const auto p = dlg.params();
-    const bool ok = simulator_->setSimulationParameters(p);
+    simParams_ = dlg.params();
+    const bool ok = simulator_->setSimulationParameters(simParams_);
+    hasSim_ = ok;
+
     log(ok ? "setSimulationParameters OK" : "setSimulationParameters FAILED");
+}
+
+void MainWindow::onFractureParams()
+{
+    if (!simulator_) return;
+
+    FractureParamDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    fracs_.clear();
+    fracs_.push_back(dlg.fracture());
+
+    bool ok = simulator_->addFractures(fracs_);
+    hasFrac_ = ok;
+
+    log(ok ? "addFractures OK" : "addFractures FAILED");
 }
 
 

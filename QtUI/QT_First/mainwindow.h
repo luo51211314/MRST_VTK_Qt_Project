@@ -111,6 +111,18 @@ private:
     VtkViewHost* vtkHost_ = nullptr;
     VtkAdapter*  vtkAdapter_ = nullptr;
 
+    // ===== 参数缓存（用户点按钮设置后存下来）=====
+    QtUItoAlgo::GridParameters       gridParams_;
+    QtUItoAlgo::FluidProperties      fluidProps_;
+    QtUItoAlgo::SimulationParameters simParams_;
+    std::vector<QtUItoAlgo::FractureInput> fracs_;
+    bool hasFrac_ = false;
+
+    bool hasGrid_  = false;
+    bool hasFluid_ = false;
+    bool hasSim_   = false;
+
+
 
 
 
@@ -137,6 +149,7 @@ private:
     void onGridParams();
     void onFluidParams();
     void onSimParams();
+    void onFractureParams();
 
 
 
