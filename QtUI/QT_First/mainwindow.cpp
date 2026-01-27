@@ -34,6 +34,9 @@
 #include "algo_adapter.h"
 #include "vtk/VtkViewHost.h"
 #include "vtk/VtkAdapter.h"
+#include <QFileDialog>
+#include <QMessageBox>
+
 
 
 
@@ -101,6 +104,8 @@ MainWindow::MainWindow(QWidget *parent)
                 simState_ = SimState::Completed;
                 if (simProgressBar_) simProgressBar_->setValue(100);
                 updateSimUi();
+                // ✅ A方案：完成后自动导出
+                exportCsvAfterSimulation();
             });
     connect(callbackBridge_, &SimCallbackBridge::sigFailed,
             this, [=](const QString& msg){
@@ -647,7 +652,60 @@ void MainWindow::onFractureParams()
     hasFrac_ = ok;
 
     log(ok ? "addFractures OK" : "addFractures FAILED");
+
 }
+    void MainWindow::exportCsvAfterSimulation()
+{
+        if (!dataTransfer_) {
+            log("[Export] dataTransfer_ is null");
+            return;
+        }
+
+        QString dir = QFileDialog::getExistingDirectory(
+            this,
+            tr("选择导出目录（CSV）"),
+            lastProjectDir.isEmpty() ? (QDir::homePath() + "/Documents") : lastProjectDir
+            );
+
+        if (dir.isEmpty()) {
+            log("[Export] canceled");
+            return;
+        }
+
+        // 记住目录，方便下次默认打开
+        lastProjectDir = dir;
+
+        const bool ok1 = dataTransfer_->exportResults(dir.toStdString());
+        const bool ok2 = dataTransfer_->exportGeometry(dir.toStdString());  // 注意：接口叫 output_path，我们这里传目录
+        QString src = QDir::current().absoluteFilePath("output_sim.csv");
+        QString dst = dir + "/output_sim.csv";
+
+        if (QFile::exists(src)) {
+            QFile::remove(dst);
+            if (QFile::copy(src, dst)) {
+                log("[Export] copied output_sim.csv");
+            } else {
+                log("[Export] copy output_sim.csv FAILED: " + src);
+            }
+        } else {
+            log("[Export] output_sim.csv NOT FOUND in: " + src);
+        }
+
+
+        log(QString("[Export] exportResults=%1, exportGeometry=%2, dir=%3")
+                .arg(ok1).arg(ok2).arg(dir));
+
+        if (!ok1 || !ok2) {
+            QMessageBox::warning(this, tr("导出提示"),
+                                 tr("导出可能未完全成功。\nexportResults=%1\nexportGeometry=%2\n目录：%3")
+                                     .arg(ok1).arg(ok2).arg(dir));
+        } else {
+            QMessageBox::information(this, tr("导出成功"),
+                                     tr("CSV 已导出到：\n%1").arg(dir));
+        }
+    }
+
+
 
 
 
