@@ -170,7 +170,21 @@ void FractureBoxSelectCallback::BuildSelectionFromRect(int ax0, int ay0, int ax1
 }
 
 void FractureBoxSelectCallback::Execute(vtkObject* caller, unsigned long eventId, void*) {
-  auto* iren = vtkRenderWindowInteractor::SafeDownCast(caller);
+auto* iren = vtkRenderWindowInteractor::SafeDownCast(caller);
+if (!iren || !Renderer) return;
+
+// ✅ Fracture Layer OFF：Box Select 完全禁用
+if (!FractureActor || FractureActor->GetPickable() == 0 || FractureActor->GetVisibility() == 0) {
+  // 关掉绿框 + 复位状态，避免残留
+  ShowBox(false);
+  bDown = false;
+  dragging = false;
+  boxLatched = false;
+
+  if (Effect) Effect->Clear(iren); // 清高亮/HUD/tooltip（兜底）
+  return;
+}
+
   if (!iren) return;
 
   if (eventId == vtkCommand::KeyPressEvent || eventId == vtkCommand::KeyReleaseEvent) {

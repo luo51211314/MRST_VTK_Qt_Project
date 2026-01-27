@@ -37,7 +37,9 @@ public:
   void UpdateHoverTooltip(vtkRenderWindowInteractor* iren,
                           vtkActor* fractureActor,
                           int mouseX, int mouseY);
-
+                          
+  void HideTooltip();
+  
   // （可选）给外部读当前选中集合
   const std::set<int>& GetSelected() const { return SelectedFractureIds; }
 
@@ -56,7 +58,6 @@ private:
   void HideHudTopLeft();
 
   void ShowTooltip(vtkRenderWindowInteractor* iren, int x, int y, const std::string& text);
-  void HideTooltip();
 
   bool GetFractureBounds(int fractureIndex, double bounds6[6]) const;
   std::string MakePickInfoText(int fractureIndex, long long cellId) const;

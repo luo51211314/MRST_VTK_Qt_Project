@@ -3,6 +3,8 @@
 #include <vtkCommand.h>
 #include <vtkSmartPointer.h>
 
+class vtkActor;
+
 class vtkActor2D;
 class vtkPlanes;
 class vtkPoints;
@@ -27,6 +29,8 @@ public:
   vtkTextActor* LockHintText = nullptr;
 
   FractureSelectEffect* Effect = nullptr; // ★新增：统一高亮+信息
+
+vtkActor* FractureActor = nullptr;  // ✅新增：用于判断 layer on/off
 
   // 原状态
   bool CamLocked = true;
