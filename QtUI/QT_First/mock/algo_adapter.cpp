@@ -1,15 +1,18 @@
 #include "algo_adapter.h"
 #include <QDebug>
+#include "edfm_3d_blackoil_integrated_simulator.h"  // 里面有 class Simulator
+
 
 AlgoAdapter::AlgoAdapter()
 {
-    engine_ = std::make_unique<MockAlgo>();
+    engine_ = std::make_unique<Simulator>();
 }
 
 AlgoAdapter::~AlgoAdapter() = default;
 
 void AlgoAdapter::setCallback(QtUItoAlgo::ISimulationCallback* cb)
 {
+    qDebug() << "[AlgoAdapter] setCallback:" << (cb ? "OK" : "NULL");
     engine_->setCallback(cb);
 }
 

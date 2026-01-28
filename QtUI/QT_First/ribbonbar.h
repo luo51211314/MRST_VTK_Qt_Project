@@ -37,6 +37,7 @@ signals:
     void gridParamsRequested();
     void fluidParamsRequested();
     void simParamsRequested();
+    void fractureParamsRequested();
 
     //远程渲染
     void startRemoteRenderMockRequested();

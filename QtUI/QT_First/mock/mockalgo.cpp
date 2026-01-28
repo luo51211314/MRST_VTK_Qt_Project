@@ -1,4 +1,5 @@
 #include "mockalgo.h"
+#include <QDebug>
 #include <chrono>
 
 MockAlgo::MockAlgo() {}
@@ -49,6 +50,7 @@ bool MockAlgo::setSimulationParameters(const QtUItoAlgo::SimulationParameters& p
 
 bool MockAlgo::runSimulation()
 {
+    qDebug() << "[MockAlgo] runSimulation() called, running_=" << running_ << " paused_=" << paused_;
     // 已在跑就不重复启动
     if (running_) return false;
 
@@ -61,6 +63,7 @@ bool MockAlgo::runSimulation()
     }
 
     worker_ = std::thread(&MockAlgo::loop, this);
+    qDebug() << "[MockAlgo] worker thread started";
     return true;
 }
 
@@ -117,6 +120,7 @@ double MockAlgo::getCurrentTime()
 
 void MockAlgo::loop()
 {
+    qDebug() << "[MockAlgo] loop() entered";
     double progress = 0.0;
     double dt = 0.1;
 
@@ -133,11 +137,20 @@ void MockAlgo::loop()
             current_time_ += dt;
         }
 
-        if (callback_) {
+        if (!callback_) {
+            // 这个一旦出现，说明 setCallback 没传进来或被覆盖了
+            qDebug() << "[MockAlgo] callback_ is NULL!";
+        } else {
+            // 每 10% 打一次，避免刷屏
+            int pct = int(progress * 100.0);
+            if (pct % 10 == 0) {
+                qDebug() << "[MockAlgo] progress=" << pct << "% time=" << getCurrentTime();
+            }
             callback_->onProgressUpdate(progress, getCurrentTime());
-            if (static_cast<int>(progress * 100) % 10 == 0)
+            if (pct % 10 == 0)
                 callback_->onTimeStepChanged(dt);
         }
+
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -148,6 +161,7 @@ void MockAlgo::loop()
             status_ = "Completed";
         }
         running_ = false;
+        qDebug() << "[MockAlgo] completed, emit onSimulationCompleted()";
         if (callback_) callback_->onSimulationCompleted();
     }
 }
