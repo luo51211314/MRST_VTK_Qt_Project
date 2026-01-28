@@ -114,6 +114,12 @@ public:
     
     // 获取压力场数据
     virtual std::vector<std::tuple<double, double, double, double>> getPressureField() = 0;
+    
+    // 从本地备份加载数据
+    virtual bool loadFromBackup(const std::string& backup_path) = 0;
+    
+    // 保存数据到本地备份
+    virtual bool saveToBackup(const std::string& backup_path) = 0;
 };
 
 // 回调接口

@@ -47,6 +47,10 @@ enum class EventType {
     PICK_WELL,
     BOX_SELECT_FRACTURES,
     BOX_SELECT_CELLS,
+    REGION_SELECT,
+    FRACTURE_PARAMETERS_CHANGED,
+    FRACTURE_REGENERATED,
+    PRESSURE_FIELD_GENERATED,
     MOUSE_MOVE,
     CAMERA_LOCK,
     CAMERA_UNLOCK
@@ -61,6 +65,9 @@ struct EventData {
         WellSelection well;
         std::vector<FractureSelection> fractures;
         std::vector<CellSelection> cells;
+        BoundingBox region;
+        FractureSelection fracture_parameters;
+        std::vector<FractureSelection> regenerated_fractures;
         Point3 mouse_position;
         bool camera_locked;
     } data;

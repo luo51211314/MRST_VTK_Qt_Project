@@ -85,6 +85,9 @@ public:
     
     // 更新时间步
     virtual bool updateTimeStep(double time_step) = 0;
+    
+    // 重新生成裂缝
+    virtual bool regenerateFractures(const std::vector<FractureData>& new_fractures) = 0;
 };
 
 // 可视化控制接口
