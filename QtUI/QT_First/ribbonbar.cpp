@@ -317,6 +317,43 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                 if (text == tr("曲线"))   return icoCurve;
             }
 
+            // ===== 数值模拟：仿真控制 =====
+            if (groupTitle == tr("仿真控制")) {
+                if (text == tr("开始")) return st->standardIcon(QStyle::SP_MediaPlay);
+                if (text == tr("暂停")) return st->standardIcon(QStyle::SP_MediaPause);
+                if (text == tr("停止")) return st->standardIcon(QStyle::SP_MediaStop);
+                if (text == tr("重置")) return st->standardIcon(QStyle::SP_BrowserReload);
+            }
+
+            // ===== 数值模拟：仿真设置 =====
+            if (groupTitle == tr("仿真设置")) {
+                if (text == tr("参数设置")) return st->standardIcon(QStyle::SP_FileDialogDetailedView);
+                if (text == tr("网格设置")) return st->standardIcon(QStyle::SP_DirIcon);
+                if (text == tr("物性参数")) return st->standardIcon(QStyle::SP_ComputerIcon);
+                if (text == tr("裂缝参数")) return st->standardIcon(QStyle::SP_MessageBoxWarning);
+            }
+
+            // ===== 数值模拟：结果与状态 =====
+            if (groupTitle == tr("结果与状态")) {
+                if (text == tr("进度"))   return st->standardIcon(QStyle::SP_ArrowRight);
+                if (text == tr("日志"))   return st->standardIcon(QStyle::SP_FileDialogInfoView);
+                if (text == tr("导出结果")) return st->standardIcon(QStyle::SP_DialogSaveButton);
+            }
+
+            // ===== 远程渲染 =====
+            if (groupTitle == tr("远程渲染")) {
+                if (text == tr("开始模拟")) return st->standardIcon(QStyle::SP_MediaPlay);
+                if (text == tr("停止模拟")) return st->standardIcon(QStyle::SP_MediaStop);
+                if (text == tr("连接"))     return st->standardIcon(QStyle::SP_DialogYesButton);
+                if (text == tr("断开"))     return st->standardIcon(QStyle::SP_DialogNoButton);
+                if (text == tr("截图"))     return st->standardIcon(QStyle::SP_DialogOpenButton);
+                if (text == tr("录屏"))     return st->standardIcon(QStyle::SP_DialogApplyButton);
+
+                // FPS 我建议不放图标，做成“纯文字小按钮”，返回空图标
+                if (text.startsWith("FPS")) return QIcon();
+            }
+
+
             return QIcon();
         };
 
@@ -332,12 +369,31 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                 b = new QToolButton(btnArea);
                 b->setText(text);
                 b->setToolTip(text);
-                b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-                b->setIconSize(QSize(24,24));
-                b->setFixedSize(68, 60);
                 b->setAutoRaise(true);
                 b->setFocusPolicy(Qt::NoFocus);
+
+                // ✅ FPS：做成小文字按钮，更像“档位选择”
+                if (title == tr("远程渲染") && text.startsWith("FPS")) {
+                    b->setToolButtonStyle(Qt::ToolButtonTextOnly);
+                    b->setFixedSize(54, 28);
+                    b->setStyleSheet(R"(
+                        QToolButton{
+                            border: 1px solid #D6DCE6;
+                            border-radius: 6px;
+                            background: transparent;
+                            padding: 0px 8px;
+                        }
+                        QToolButton:hover{ background:#F3F6FB; border-color:#C9D6EA; }
+                        QToolButton:pressed{ background:#E7EEF9; }
+                    )");
+                } else {
+                    // 其它没图标的保持原样
+                    b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+                    b->setIconSize(QSize(24,24));
+                    b->setFixedSize(68, 60);
+                }
             }
+
 
             // ✅ 关键：如果它就是“工区组”的“导入”按钮，就发信号给外部
             if (title == tr("工区") && text == tr("导入")) {

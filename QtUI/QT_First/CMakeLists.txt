@@ -51,6 +51,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         # ===== Algo sources (from ../../Algo) =====
         ../../Algo/edfm_3d_blackoil_integrated_simulator.cpp
         fractureparamdialog.h fractureparamdialog.cpp
+        qttovtkcontroladapter.h qttovtkcontroladapter.cpp
         #../../Algo/edfm_3d_blackoil.cpp
         #../../Algo/edfm_3d_blackoil_lgr.cpp
 

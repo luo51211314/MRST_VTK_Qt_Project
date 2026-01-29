@@ -37,6 +37,9 @@ public:
     bool exportGeometry(const std::string& output_path) override;
     std::map<std::string, std::vector<double>> getProductionData() override;
     std::vector<std::tuple<double,double,double,double>> getPressureField() override;
+    // ✅ 新增：本地备份支持（接口新增后必须实现）
+    bool loadFromBackup(const std::string& backup_path) override;
+    bool saveToBackup(const std::string& backup_path) override;
 
 private:
     // 当前阶段：复用 MockAlgo；后面换成真实 Algo 引擎即可

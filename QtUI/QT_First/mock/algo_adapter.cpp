@@ -3,9 +3,30 @@
 #include "edfm_3d_blackoil_integrated_simulator.h"  // 里面有 class Simulator
 
 
+
+// ✅ Qt 侧兜底：补齐 Simulator 因接口新增而缺失的纯虚函数
+class SimulatorQtImpl final : public Simulator
+{
+public:
+    using Simulator::Simulator; // 继承构造（如果 Simulator 有默认构造也没问题）
+
+    bool loadFromBackup(const std::string& /*backup_path*/) override
+    {
+        // 先兜底：不做也行，至少别让它抽象
+        return false;
+    }
+
+    bool saveToBackup(const std::string& /*backup_path*/) override
+    {
+        return false;
+    }
+};
+
+
+
 AlgoAdapter::AlgoAdapter()
 {
-    engine_ = std::make_unique<Simulator>();
+    engine_ = std::make_unique<SimulatorQtImpl>();
 }
 
 AlgoAdapter::~AlgoAdapter() = default;
@@ -65,3 +86,14 @@ bool AlgoAdapter::exportResults(const std::string& output_dir) { return engine_-
 bool AlgoAdapter::exportGeometry(const std::string& output_path) { return engine_->exportGeometry(output_path); }
 std::map<std::string, std::vector<double>> AlgoAdapter::getProductionData() { return engine_->getProductionData(); }
 std::vector<std::tuple<double,double,double,double>> AlgoAdapter::getPressureField() { return engine_->getPressureField(); }
+
+bool AlgoAdapter::loadFromBackup(const std::string& backup_path)
+{
+    return engine_->loadFromBackup(backup_path);
+}
+
+bool AlgoAdapter::saveToBackup(const std::string& backup_path)
+{
+    return engine_->saveToBackup(backup_path);
+}
+
