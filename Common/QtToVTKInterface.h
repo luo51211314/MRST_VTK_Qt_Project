@@ -37,6 +37,20 @@ struct RegionSelection {
     bool include_cells; // 是否包含单元
 };
 
+// 网格参数
+struct GridParameters {
+    int Nx, Ny, Nz;
+    double Lx, Ly, Lz;
+};
+
+// 井参数
+struct WellParameters {
+    int id;
+    Point3 position;
+    double bhp;
+    double WI;
+};
+
 // 可视化更新类型
 enum class UpdateType {
     FRACTURES,        // 裂缝更新
@@ -113,20 +127,6 @@ public:
     
     // 批量修改裂缝
     virtual bool modifyFractures(const std::vector<int>& fracture_ids, const FractureParameters& new_params) = 0;
-};
-
-// 网格参数
-struct GridParameters {
-    int Nx, Ny, Nz;
-    double Lx, Ly, Lz;
-};
-
-// 井参数
-struct WellParameters {
-    int id;
-    Point3 position;
-    double bhp;
-    double WI;
 };
 
 // 回调接口
