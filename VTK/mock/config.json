@@ -1,0 +1,6 @@
+{
+  "grid_file": "csv_file/grid_info.csv",
+  "field_file": "csv_file/final_field.csv",
+  "fracture_file": "csv_file/fracture_geometry.csv",
+  "well_file": "csv_file/well_info.csv"
+}
