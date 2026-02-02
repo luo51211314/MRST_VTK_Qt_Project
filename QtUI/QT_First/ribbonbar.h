@@ -48,6 +48,7 @@ signals:
     void screenshotRemoteRenderRequested();
     void recordRemoteRenderRequested();
     void setRemoteRenderFpsRequested(int fps);
+    void syncParamsToVtkRequested();
 
 
 

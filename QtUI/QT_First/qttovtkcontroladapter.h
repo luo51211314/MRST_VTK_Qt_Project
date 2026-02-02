@@ -15,7 +15,7 @@
 
 // ✅ 先默认关闭（等接口修好后你再改成 1）
 #ifndef QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION
-#define QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION 0
+#define QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION
 #endif
 
 // ---- 前置声明（不依赖接口头的顺序） ----
@@ -24,34 +24,11 @@ struct FractureParameters;
 struct GridParameters;
 struct WellParameters;
 
-#if QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION
-class IVisualizationControl;
-#endif
+
 }
 
 class VtkAdapter;
 class VtkViewHost;
-
-// =======================================================
-// 关闭实现（默认）：只是一个占位类，不继承接口，不会触发抽象类/类型未定义问题
-// =======================================================
-#if !QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION
-
-class QtToVtkControlAdapter
-{
-public:
-    QtToVtkControlAdapter(VtkAdapter* vtk, VtkViewHost* host)
-        : vtk_(vtk), host_(host) {}
-
-    // 占位API：等接口修好后再替换成真正 override 的接口实现
-    bool isEnabled() const { return false; }
-
-private:
-    VtkAdapter*  vtk_  = nullptr;
-    VtkViewHost* host_ = nullptr;
-};
-
-#else
 
 // =======================================================
 // 开启实现（接口修好后）：继承并实现 QtToVTK::IVisualizationControl
@@ -83,4 +60,4 @@ private:
 
 
 
-#endif // QTTOVTKCONTROLADAPTER_H
+

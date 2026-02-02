@@ -10,11 +10,11 @@ GridParamDialog::GridParamDialog(QWidget* parent) : QDialog(parent)
 
     nx_ = new QSpinBox(this); ny_ = new QSpinBox(this); nz_ = new QSpinBox(this);
     nx_->setRange(1, 2000); ny_->setRange(1, 2000); nz_->setRange(1, 2000);
-    nx_->setValue(50); ny_->setValue(50); nz_->setValue(20);
+    nx_->setValue(20); ny_->setValue(10); nz_->setValue(2);
 
     lx_ = new QDoubleSpinBox(this); ly_ = new QDoubleSpinBox(this); lz_ = new QDoubleSpinBox(this);
     for (auto* b : {lx_, ly_, lz_}) { b->setRange(0.0001, 1e9); b->setDecimals(4); }
-    lx_->setValue(1000); ly_->setValue(1000); lz_->setValue(100);
+    lx_->setValue(1000); ly_->setValue(500); lz_->setValue(20);
 
     auto* form = new QFormLayout;
     form->addRow("Nx", nx_);

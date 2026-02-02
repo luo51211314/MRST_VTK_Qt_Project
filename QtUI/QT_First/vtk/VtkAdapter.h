@@ -3,6 +3,9 @@
 #include <QImage>
 #include <QTimer>
 #include <QByteArray>
+#include "qttovtkcontroladapter.h"
+#include <tuple>
+#include <vector>
 
 
 
@@ -26,6 +29,17 @@ public:
 
     // 模拟：收到一帧网络数据（JPEG/PNG 字节），Qt 端解码后显示
     void submitEncodedFrame(const QByteArray& bytes, const char* hintFormat = "JPG");
+
+    // === QtToVTK 数据输入 ===
+    void setFractures(const std::vector<QtToVTK::FractureParameters>& fractures);
+    void setGrid(const QtToVTK::GridParameters& grid);
+    void setWells(const std::vector<QtToVTK::WellParameters>& wells);
+    void setPressureField(const std::vector<std::tuple<double,double,double,double>>& p);
+    void setSaturationField(const std::vector<std::tuple<double,double,double,double>>& s);
+
+    void resetViewState();   // 对应 resetView
+    bool saveViewState(const QString& file);
+    bool loadViewState(const QString& file);
 
 
 protected:
@@ -59,6 +73,17 @@ private:
 
     int    pickedId_ = -1;  // 模拟拾取结果
 
+    // ====== 保存从 QtToVTK 进来的数据（新增）======
+    std::vector<QtToVTK::FractureParameters> fractures_;
+    QtToVTK::GridParameters grid_;
+    std::vector<QtToVTK::WellParameters> wells_;
+    std::vector<std::tuple<double,double,double,double>> pressure_;
+    std::vector<std::tuple<double,double,double,double>> saturation_;
+
+
     void renderOnce();
+
+
+
 
 };

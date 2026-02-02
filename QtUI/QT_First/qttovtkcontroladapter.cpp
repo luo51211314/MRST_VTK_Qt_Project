@@ -1,7 +1,4 @@
-#include "QtToVtkControlAdapter.h"
-
-#if QT_TOVTK_ENABLE_INTERFACE_IMPLEMENTATION
-
+#include "qttovtkcontroladapter.h"
 #include <tuple>
 #include <QFile>
 #include <QJsonDocument>
@@ -15,53 +12,63 @@ QtToVtkControlAdapter::QtToVtkControlAdapter(VtkAdapter* vtk, VtkViewHost* host)
     : vtk_(vtk), host_(host)
 {}
 
-// 下面先给最小实现（后续我们再转发到 VtkAdapter）
-bool QtToVtkControlAdapter::updateFractures(const std::vector<QtToVTK::FractureParameters>&)
+// 真正转发到 VtkAdapter
+
+bool QtToVtkControlAdapter::updateFractures(
+    const std::vector<QtToVTK::FractureParameters>& fractures)
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->setFractures(fractures);
+    return true;
 }
 
-bool QtToVtkControlAdapter::updatePressureField(const std::vector<std::tuple<double,double,double,double>>&)
+bool QtToVtkControlAdapter::updatePressureField(
+    const std::vector<std::tuple<double,double,double,double>>& pressure_data)
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->setPressureField(pressure_data);
+    return true;
 }
 
-bool QtToVtkControlAdapter::updateSaturationField(const std::vector<std::tuple<double,double,double,double>>&)
+bool QtToVtkControlAdapter::updateSaturationField(
+    const std::vector<std::tuple<double,double,double,double>>& saturation_data)
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->setSaturationField(saturation_data);
+    return true;
 }
 
-bool QtToVtkControlAdapter::updateGrid(const QtToVTK::GridParameters&)
+bool QtToVtkControlAdapter::updateGrid(const QtToVTK::GridParameters& grid_params)
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->setGrid(grid_params);
+    return true;
 }
 
-bool QtToVtkControlAdapter::updateWells(const std::vector<QtToVTK::WellParameters>&)
+bool QtToVtkControlAdapter::updateWells(
+    const std::vector<QtToVTK::WellParameters>& wells)
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->setWells(wells);
+    return true;
 }
 
 bool QtToVtkControlAdapter::resetView()
 {
-    return vtk_ != nullptr;
+    if (!vtk_) return false;
+    vtk_->resetViewState();   // 你在 VtkAdapter 里新增的那个 reset
+    return true;
 }
 
 bool QtToVtkControlAdapter::saveViewState(const std::string& file_path)
 {
-    // 先放一个最小可用：写一个空json，保证接口可调用
-    QFile f(QString::fromStdString(file_path));
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    QJsonObject o;
-    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
-    return true;
+    if (!vtk_) return false;
+    return vtk_->saveViewState(QString::fromStdString(file_path));
 }
 
 bool QtToVtkControlAdapter::loadViewState(const std::string& file_path)
 {
-    QFile f(QString::fromStdString(file_path));
-    if (!f.open(QIODevice::ReadOnly)) return false;
-    const auto doc = QJsonDocument::fromJson(f.readAll());
-    return doc.isObject();
+    if (!vtk_) return false;
+    return vtk_->loadViewState(QString::fromStdString(file_path));
 }
 
-#endif

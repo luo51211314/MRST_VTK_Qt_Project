@@ -16,10 +16,10 @@ SimParamDialog::SimParamDialog(QWidget* parent) : QDialog(parent)
         return b;
     };
 
-    total_ = make(30.0, 0.0001, 1e6, 3);
-    dt0_   = make(0.1,  1e-6,   1e6, 6);
-    dtMin_ = make(0.01, 1e-6,   1e6, 6);
-    dtMax_ = make(1.0,  1e-6,   1e6, 6);
+    total_ = make(100.0, 0.0001, 1e6, 3);
+    dt0_   = make(0.001,  1e-6,   1e6, 6);
+    dtMin_ = make(0.000001, 1e-6,   1e6, 6);
+    dtMax_ = make(10.0,  1e-6,   1e6, 6);
 
     auto* form = new QFormLayout;
     form->addRow("total_time_days", total_);

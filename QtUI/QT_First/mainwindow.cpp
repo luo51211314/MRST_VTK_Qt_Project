@@ -36,6 +36,11 @@
 #include "vtk/VtkAdapter.h"
 #include <QFileDialog>
 #include <QMessageBox>
+#include "qttovtkcontroladapter.h"
+#include <cmath>
+#include <algorithm>
+
+
 
 
 
@@ -63,6 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     vtkAdapter_ = new VtkAdapter(vtkHost_, this);
     connect(vtkAdapter_, &VtkAdapter::sigLog, this, &MainWindow::log);
     vtkAdapter_->initRemoteStream();
+    vtkControl_ = new QtToVtkControlAdapter(vtkAdapter_, vtkHost_);
+
 
     resizeDocks({dockLayers, dockProps}, {190, 170}, Qt::Horizontal);
 
@@ -304,6 +311,10 @@ void MainWindow::initConnections()
         vtkAdapter_->stopMockStream();
         log("[UI] 停止远程渲染模拟");
     });
+    connect(ribbonBar, &RibbonBar::syncParamsToVtkRequested,
+            this, &MainWindow::onSyncToVtk);
+
+
 
     // ===== 预留：后续真实远程渲染接入 =====
     connect(ribbonBar, &RibbonBar::setRemoteRenderFpsRequested, this, [this](int fps){
@@ -643,17 +654,111 @@ void MainWindow::onFractureParams()
     if (!simulator_) return;
 
     FractureParamDialog dlg(this);
+
+    // ✅ 自动填充：用网格 Lx/Ly/Lz（你 gridParams_ 里就是 Lx/Ly/Lz）
+    if (hasGrid_) dlg.setGridBounds(gridParams_.Lx, gridParams_.Ly, gridParams_.Lz);
+
     if (dlg.exec() != QDialog::Accepted) return;
 
-    fracs_.clear();
-    fracs_.push_back(dlg.fracture());
-
+    fracs_ = dlg.fractures();                 // ✅ 一次拿一组
     bool ok = simulator_->addFractures(fracs_);
     hasFrac_ = ok;
 
-    log(ok ? "addFractures OK" : "addFractures FAILED");
+    log(ok ? QString("addFractures OK (count=%1)").arg(fracs_.size())
+           : "addFractures FAILED");
 
 }
+
+
+static QtToVTK::Point3 toPoint3(const QtUItoAlgo::Point3& p)
+{
+    return {p.x, p.y, p.z};
+}
+
+static QtToVTK::Point3 average4(const QtUItoAlgo::Point3 v[4])
+{
+    QtToVTK::Point3 c{0,0,0};
+    for (int i=0;i<4;i++) {
+        c.x += v[i].x;
+        c.y += v[i].y;
+        c.z += v[i].z;
+    }
+    c.x /= 4.0; c.y /= 4.0; c.z /= 4.0;
+    return c;
+}
+
+static double dist(const QtUItoAlgo::Point3& a, const QtUItoAlgo::Point3& b)
+{
+    const double dx=a.x-b.x, dy=a.y-b.y, dz=a.z-b.z;
+    return std::sqrt(dx*dx+dy*dy+dz*dz);
+}
+void MainWindow::onSyncToVtk()
+{
+    // 1) 基本检查
+    if (!vtkControl_) {   // 你得有这个成员（见第④处）
+        log("[VTK] syncToVtk FAILED: vtkControl_ is null");
+        return;
+    }
+
+    if (!hasGrid_) {
+        QMessageBox::warning(this, "缺少参数", "请先设置网格参数（Grid Params）");
+        return;
+    }
+
+    // 2) 同步网格：QtUItoAlgo::GridParameters -> QtToVTK::GridParameters
+    QtToVTK::GridParameters g{};
+    g.Nx = gridParams_.Nx;
+    g.Ny = gridParams_.Ny;
+    g.Nz = gridParams_.Nz;
+    g.Lx = gridParams_.Lx;
+    g.Ly = gridParams_.Ly;
+    g.Lz = gridParams_.Lz;
+
+    bool okG = vtkControl_->updateGrid(g);
+    log(okG ? "[VTK] updateGrid OK" : "[VTK] updateGrid FAILED");
+
+    // 3) 同步裂缝（如果没有裂缝就跳过）
+    if (!hasFrac_ || fracs_.empty()) {
+        log("[VTK] no fractures, skip updateFractures");
+        vtkControl_->resetView();
+        return;
+    }
+
+    // ⚠️ 这里需要把 fracs_（QtUItoAlgo 的 fracture 类型）转换成 QtToVTK::FractureParameters
+    // 我给你一个“通用模板”，你只需要把字段名对上即可
+    std::vector<QtToVTK::FractureParameters> vf;
+    vf.reserve(fracs_.size());
+
+    for (const auto& f : fracs_) {
+        QtToVTK::FractureParameters fp{};
+        fp.id       = f.id;         // 如果你的字段叫 id_
+        fp.aperture = f.aperture;   // 如果字段叫 aperture_
+        fp.perm     = f.perm;       // 如果字段叫 perm_
+
+        // center：四顶点平均
+        fp.center = average4(f.vertices);
+
+        // length：取矩形一条边长度（0-1），另一条边是 1-2
+        const double L1 = dist(f.vertices[0], f.vertices[1]);
+        const double L2 = dist(f.vertices[1], f.vertices[2]);
+        fp.length = std::max(L1, L2);
+
+        // angle/dip：你现在的 FractureInput 没提供角度/倾角
+        // 联调阶段先设 0，不影响链路验证
+        fp.angle = 0.0;
+        fp.dip   = 0.0;
+
+        vf.push_back(fp);
+    }
+
+    bool okF = vtkControl_->updateFractures(vf);
+    log(okF ? "[VTK] updateFractures OK" : "[VTK] updateFractures FAILED");
+
+    // 可选：让视图归位（方便你看到变化）
+    vtkControl_->resetView();
+}
+
+
     void MainWindow::exportCsvAfterSimulation()
 {
         if (!dataTransfer_) {

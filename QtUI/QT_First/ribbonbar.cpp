@@ -348,6 +348,7 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                 if (text == tr("断开"))     return st->standardIcon(QStyle::SP_DialogNoButton);
                 if (text == tr("截图"))     return st->standardIcon(QStyle::SP_DialogOpenButton);
                 if (text == tr("录屏"))     return st->standardIcon(QStyle::SP_DialogApplyButton);
+                if (text == tr("发送参数"))  return st->standardIcon(QStyle::SP_BrowserReload);
 
                 // FPS 我建议不放图标，做成“纯文字小按钮”，返回空图标
                 if (text.startsWith("FPS")) return QIcon();
@@ -464,6 +465,10 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                 else if (text == tr("录屏")) {
                     connect(b, &QToolButton::clicked, this, &RibbonBar::recordRemoteRenderRequested);
                 }
+                else if (text == tr("发送参数")) {
+                    connect(b, &QToolButton::clicked, this, &RibbonBar::syncParamsToVtkRequested);
+                }
+
                 // FPS：先用三个按钮占位（15/30/60），后续也可以换成下拉框
                 else if (text == tr("FPS15")) {
                     connect(b, &QToolButton::clicked, this, [this](){ emit setRemoteRenderFpsRequested(15); });
@@ -538,6 +543,7 @@ QWidget* RibbonBar::buildRibbonPage(const QString& key)
                                      {tr("开始模拟"), tr("停止模拟"),
                                       tr("连接"), tr("断开"),
                                       tr("截图"), tr("录屏"),
+                                      tr("发送参数"),
                                       tr("FPS15"), tr("FPS30"), tr("FPS60")}));
         pageLay->addWidget(makeVLine(page));
 

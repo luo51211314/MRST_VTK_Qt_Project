@@ -21,6 +21,8 @@
 #include "mock/mockalgo.h"
 #include "mock/SimCallbackBridge.h"
 #include "QtUItoAlgoInterface.h"
+#include "qttovtkcontroladapter.h"
+
 
 
 
@@ -116,6 +118,8 @@ private:
     QtUItoAlgo::FluidProperties      fluidProps_;
     QtUItoAlgo::SimulationParameters simParams_;
     std::vector<QtUItoAlgo::FractureInput> fracs_;
+    QtToVTK::IVisualizationControl* vtkControl_ = nullptr;
+
     bool hasFrac_ = false;
 
     bool hasGrid_  = false;
@@ -152,6 +156,7 @@ private:
     void onFluidParams();
     void onSimParams();
     void onFractureParams();
+    void onSyncToVtk();
 
 
 
