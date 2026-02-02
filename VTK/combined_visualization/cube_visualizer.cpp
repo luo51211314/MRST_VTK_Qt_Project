@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 
         createSolidBlockScene(renderer, fieldData, lut);
         drawFractures(renderer, fractures, 1.0);
-        drawWells(renderer, wells, 1.0);
+        drawWells(renderer, wells, fractures, 1.0);
 
         setupCamera(renderer, cx, cy, cz, maxDim, false);
 

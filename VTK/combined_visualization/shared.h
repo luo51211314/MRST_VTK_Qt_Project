@@ -37,6 +37,7 @@
 #include <vtkTransformFilter.h>
 #include <vtkLine.h>
 #include <vtkPolyData.h>
+#include <vtkCylinderSource.h>
 
 // 辅助函数
 extern std::string trim(const std::string& str);
@@ -51,6 +52,7 @@ struct GridInfo {
 
 struct Fracture {
     int id;
+    std::string type; // "natural" or "artificial"
     std::vector<std::tuple<double, double, double>> points;
 };
 
@@ -86,9 +88,10 @@ extern vtkSmartPointer<vtkScalarBarActor> createColorBar(vtkLookupTable* lut);
 extern void createStackedLayersScene(vtkRenderer* renderer, const FieldData& data, vtkLookupTable* lut, double zScaleFactor = 5.0);
 extern void createSolidBlockScene(vtkRenderer* renderer, const FieldData& data, vtkLookupTable* lut);
 extern void drawFractures(vtkRenderer* renderer, const std::vector<Fracture>& fractures, double zScaleFactor = 1.0);
-extern void drawWells(vtkRenderer* renderer, const std::vector<WellInfo>& wells, double zScaleFactor = 1.0);
+extern void drawWells(vtkRenderer* renderer, const std::vector<WellInfo>& wells, const std::vector<Fracture>& fractures, double zScaleFactor = 1.0);
 extern void saveImage(vtkRenderWindow* renderWindow, const std::string& filename);
 extern void setupCamera(vtkRenderer* renderer, double cx, double cy, double cz, double maxLen, bool isStacked);
+extern void createFracturesWellsScene(vtkRenderer* renderer, const std::vector<Fracture>& fractures, const std::vector<WellInfo>& wells, double zScaleFactor = 1.0);
 
 // 配置文件读取函数
 extern bool readConfig(const std::string& filename, std::string& gridFile, std::string& fieldFile, std::string& fractureFile, std::string& wellFile);

@@ -26,6 +26,14 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    if (visualizationType == "fractures" || visualizationType == "both") {
+        std::cout << "Running fractures and wells visualization..." << std::endl;
+        int fracturesResult = system("./fractures_wells_visualizer");
+        if (fracturesResult != 0) {
+            std::cerr << "Error running fractures and wells visualization." << std::endl;
+        }
+    }
+
     std::cout << "Main controller completed." << std::endl;
     return 0;
 }

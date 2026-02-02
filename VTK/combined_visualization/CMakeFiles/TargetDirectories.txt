@@ -1,0 +1,3 @@
+/root/mrst/combined_visualization/CMakeFiles/edfm_vtk.dir
+/root/mrst/combined_visualization/CMakeFiles/edit_cache.dir
+/root/mrst/combined_visualization/CMakeFiles/rebuild_cache.dir

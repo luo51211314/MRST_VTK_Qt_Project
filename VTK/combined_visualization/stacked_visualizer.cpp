@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
 
         createStackedLayersScene(renderer, fieldData, lut, 10.0);
         drawFractures(renderer, fractures, 10.0);
-        drawWells(renderer, wells, 10.0);
+        drawWells(renderer, wells, fractures, 10.0);
 
         setupCamera(renderer, cx, cy, cz * 10.0, maxDim, true);
 

@@ -1,7 +1,0 @@
-{
-  "grid_file": "/home/jy/projects/mrst1/render/grid_info.csv",
-  "field_file": "/home/jy/projects/mrst1/render/final_field.csv",
-  "fracture_file": "/home/jy/projects/mrst1/render/fracture_geometry.csv",
-  "well_file": "/home/jy/projects/mrst1/render/well_info.csv"
-}
-

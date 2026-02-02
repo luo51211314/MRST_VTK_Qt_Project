@@ -11,6 +11,7 @@ find_package(VTK REQUIRED COMPONENTS
   CommonDataModel
   FiltersCore
   FiltersGeometry
+  FiltersSources
   RenderingCore
   RenderingOpenGL2
   RenderingAnnotation
@@ -37,15 +38,17 @@ add_executable(combined_pressure_visualizer combined_pressure_visualizer.cpp)
 add_executable(stacked_visualizer stacked_visualizer.cpp)
 add_executable(cube_visualizer cube_visualizer.cpp)
 add_executable(main_visualizer main.cpp)
+add_executable(fractures_wells_visualizer fractures_wells_visualizer.cpp)
 
 # 链接库
 target_link_libraries(combined_pressure_visualizer shared_lib ${VTK_LIBRARIES})
 target_link_libraries(stacked_visualizer shared_lib ${VTK_LIBRARIES})
 target_link_libraries(cube_visualizer shared_lib ${VTK_LIBRARIES})
 target_link_libraries(main_visualizer)
+target_link_libraries(fractures_wells_visualizer shared_lib ${VTK_LIBRARIES})
 
 # 确保VTK模块正确链接
 vtk_module_autoinit(
-  TARGETS combined_pressure_visualizer stacked_visualizer cube_visualizer
+  TARGETS combined_pressure_visualizer stacked_visualizer cube_visualizer fractures_wells_visualizer
   MODULES ${VTK_LIBRARIES}
 )
