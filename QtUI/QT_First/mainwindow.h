@@ -39,7 +39,7 @@ class QAction;
 class QToolBar;
 class VtkViewHost;
 class VtkAdapter;
-
+class VtkSmokeView;   // 前向声明，避免 include 太多
 
 class MainWindow : public QMainWindow
 {
@@ -125,6 +125,8 @@ private:
     bool hasGrid_  = false;
     bool hasFluid_ = false;
     bool hasSim_   = false;
+
+    VtkSmokeView* smokeView_ = nullptr;
 
 
 

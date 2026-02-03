@@ -39,6 +39,7 @@
 #include "qttovtkcontroladapter.h"
 #include <cmath>
 #include <algorithm>
+#include "vtk/VtkSmokeView.h"
 
 
 
@@ -54,6 +55,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 
 {
+    qDebug() << "[TRACE] MainWindow ctor entered, qApp =" << qApp;
+
     resize(1200, 800);  // 主窗口初始大小（Ribbon + Dock + 中央区比较舒适）
 
     // ===== 初始化顺序 =====
@@ -324,7 +327,34 @@ void MainWindow::initConnections()
     });
 
     connect(ribbonBar, &RibbonBar::connectRemoteRenderRequested, this, [this](){
+        qDebug() << "[UI] connectRemoteRenderRequested triggered"
+                 << "qApp=" << qApp
+                 << "thread=" << QThread::currentThread();
+
+
         log("[UI] 连接远程渲染（预留）");
+
+        // ✅ 核心：无论信号来自哪里，都把“创建 QWidget”的动作丢回 GUI 线程
+        QMetaObject::invokeMethod(this, [this]() {
+            QWidget* host = centralWidget();     // 你中间区域的容器（如果你有更具体的 centerPanel 就换成它）
+            if (!host) return;
+
+            if (!smokeView_) {
+                smokeView_ = new VtkSmokeView(host);
+                smokeView_->setMinimumSize(200, 200);
+
+                // 如果 centralWidget 没 layout，就给它补一个
+                if (!host->layout()) {
+                    auto* lay = new QVBoxLayout(host);
+                    lay->setContentsMargins(0,0,0,0);
+                    lay->setSpacing(0);
+                }
+                host->layout()->addWidget(smokeView_);
+            }
+
+            smokeView_->show();
+            smokeView_->raise();
+        }, Qt::QueuedConnection);
     });
 
     connect(ribbonBar, &RibbonBar::disconnectRemoteRenderRequested, this, [this](){

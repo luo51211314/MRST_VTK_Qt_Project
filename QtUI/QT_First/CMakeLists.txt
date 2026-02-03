@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.22)
 
 project(QT_First VERSION 0.1 LANGUAGES CXX)
 
@@ -9,10 +9,27 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Svg Concurrent)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Svg Concurrent OpenGLWidgets)
 
 
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg Concurrent)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg Concurrent OpenGLWidgets)
+
+# ====== VTK ======
+find_package(VTK REQUIRED COMPONENTS
+      CommonCore
+      CommonDataModel
+      CommonColor
+      FiltersSources
+      RenderingCore
+      RenderingOpenGL2
+      InteractionStyle
+      RenderingQt
+      GUISupportQt
+)
+
+message(STATUS "VTK_VERSION = ${VTK_VERSION}")
+message(STATUS "VTK_LIBRARIES = ${VTK_LIBRARIES}")
+
 
 set(PROJECT_SOURCES
         main.cpp
@@ -52,6 +69,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ../../Algo/edfm_3d_blackoil_integrated_simulator.h
         ../../Algo/edfm_3d_blackoil_integrated_simulator.cpp
         qttovtkcontroladapter.h qttovtkcontroladapter.cpp
+        vtk/VtkSmokeView.cpp vtk/VtkSmokeView.h
         #../../Algo/edfm_3d_blackoil.cpp
         #../../Algo/edfm_3d_blackoil_lgr.cpp
 
@@ -92,7 +110,28 @@ target_include_directories(QT_First PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/eigen/eigen
 )
 
-target_link_libraries(QT_First PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Svg Qt${QT_VERSION_MAJOR}::Concurrent)
+target_link_libraries(QT_First PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Svg
+    Qt${QT_VERSION_MAJOR}::Concurrent
+    Qt${QT_VERSION_MAJOR}::OpenGLWidgets
+
+    VTK::CommonCore
+    VTK::CommonDataModel
+    VTK::FiltersSources
+    VTK::InteractionStyle
+    VTK::RenderingCore
+    VTK::RenderingOpenGL2
+    VTK::GUISupportQt
+    ${VTK_LIBRARIES}
+)
+
+vtk_module_autoinit(
+  TARGETS QT_First
+  MODULES MODULES ${VTK_LIBRARIES}
+)
+
+
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
