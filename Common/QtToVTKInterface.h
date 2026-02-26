@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <tuple>
 
 // Qt 到 VTK 的接口定义
 
