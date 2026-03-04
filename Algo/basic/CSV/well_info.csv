@@ -1,0 +1,4 @@
+well_id,node_idx,type,x,y,z,WI,P_bhp
+0,838,Fracture,399.9,175,15,310851,50
+1,846,Fracture,500.1,175,15,310851,50
+2,854,Fracture,600.1,175,15,310851,50
