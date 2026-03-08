@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <cstdint> // 添加此头文件以支持 uint16_t
 
 // QtUI 到 Algo 的接口定义
 
@@ -24,6 +25,13 @@ struct FractureInput {
 struct GridParameters {
     int Nx, Ny, Nz;
     double Lx, Ly, Lz;
+    
+    // LGR (局部网格加密) 参数
+    bool enable_lgr = true;
+    double d_threshold = 30.0;     // 影响区域阈值
+    uint16_t lgr_Nrx = 4;          // X方向加密数
+    uint16_t lgr_Nry = 4;          // Y方向加密数
+    uint16_t lgr_Nrz = 2;          // Z方向加密数
 };
 
 struct FluidProperties {
@@ -59,6 +67,16 @@ struct SimulationParameters {
     double max_time_step;
 };
 
+// 表示单个节点的物理状态
+struct NodeState {
+    int node_id;
+    double x, y, z;
+    double P;   // 压力
+    double Sw;  // 含水饱和度
+    double Sg;  // 含气饱和度
+    bool is_fracture; // true 为裂缝段(Segment)，false 为基质(Leaf)
+};
+
 // 模拟器控制接口
 class ISimulatorController {
 public:
@@ -81,6 +99,12 @@ public:
     
     // 运行模拟
     virtual bool runSimulation() = 0;
+    
+    // 异步启动模拟计算（后台线程）
+    virtual bool runSimulationAsync() = 0;
+    
+    // 同步执行单个时间步 (便于 UI 逐帧渲染或调试)
+    virtual bool stepSimulation() = 0; 
     
     // 暂停模拟
     virtual bool pauseSimulation() = 0;
@@ -112,14 +136,8 @@ public:
     // 获取产量数据
     virtual std::map<std::string, std::vector<double>> getProductionData() = 0;
     
-    // 获取压力场数据
-    virtual std::vector<std::tuple<double, double, double, double>> getPressureField() = 0;
-    
-    // 从本地备份加载数据
-    virtual bool loadFromBackup(const std::string& backup_path) = 0;
-    
-    // 保存数据到本地备份
-    virtual bool saveToBackup(const std::string& backup_path) = 0;
+    // 获取场数据 (替换原有的 getPressureField，输出完整的三相流场数据)
+    virtual std::vector<NodeState> getFieldData() = 0;
 };
 
 // 回调接口

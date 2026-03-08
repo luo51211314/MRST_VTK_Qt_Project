@@ -16,17 +16,32 @@ struct Point3 {
 
 struct CellData {
     int id;
+    int parent_id;     // 适配 LGR：记录所属粗网格 ID
     Point3 center;
+    double dx, dy, dz; // 适配 LGR：每个细分网格尺寸不同，必须独立传递
     double pressure;
     double Sw;
     double Sg;
 };
 
+// 全局物理裂缝几何数据 (仅用于轮廓显示)
 struct FractureData {
     int id;
     std::vector<Point3> vertices;
     double aperture;
     double perm;
+};
+
+// 适配 EDFM：相交裂缝段数据 (带物理状态的计算节点)
+struct SegmentData {
+    int id;
+    int frac_id;
+    int matrix_leaf_id;
+    std::vector<Point3> poly_vertices; // 裁剪后的多边形顶点，用于 VTK 渲染多边形面
+    Point3 center;
+    double pressure;
+    double Sw;
+    double Sg;
 };
 
 struct WellData {
@@ -39,7 +54,7 @@ struct WellData {
 struct GridData {
     int Nx, Ny, Nz;
     double Lx, Ly, Lz;
-    double dx, dy, dz;
+    // 移除了全局的 dx, dy, dz，因为 LGR 导致网格非均一，尺寸由 CellData 提供
 };
 
 // 可视化数据接口
@@ -50,11 +65,14 @@ public:
     // 获取网格数据
     virtual GridData getGridData() = 0;
     
-    // 获取单元数据
+    // 获取单元数据 (包含 LGR 细网格)
     virtual std::vector<CellData> getCellData() = 0;
     
-    // 获取裂缝数据
+    // 获取全局裂缝轮廓数据
     virtual std::vector<FractureData> getFractureData() = 0;
+
+    // 获取 EDFM 裂缝段数据及状态
+    virtual std::vector<SegmentData> getSegmentData() = 0;
     
     // 获取井数据
     virtual std::vector<WellData> getWellData() = 0;
@@ -74,8 +92,11 @@ public:
     // 更新单元数据
     virtual bool updateCellData(const std::vector<CellData>& cell_data) = 0;
     
-    // 更新裂缝数据
+    // 更新全局裂缝数据
     virtual bool updateFractureData(const std::vector<FractureData>& fracture_data) = 0;
+
+    // 更新 EDFM 裂缝段状态数据
+    virtual bool updateSegmentData(const std::vector<SegmentData>& segment_data) = 0;
     
     // 更新井数据
     virtual bool updateWellData(const std::vector<WellData>& well_data) = 0;
@@ -98,11 +119,17 @@ public:
     // 显示压力场
     virtual bool showPressureField(bool show) = 0;
     
-    // 显示饱和度场
-    virtual bool showSaturationField(bool show) = 0;
+    // 显示含水饱和度场 (拆分水气)
+    virtual bool showWaterSaturationField(bool show) = 0;
+
+    // 显示含气饱和度场 (拆分水气)
+    virtual bool showGasSaturationField(bool show) = 0;
     
-    // 显示裂缝
+    // 显示全局裂缝轮廓
     virtual bool showFractures(bool show) = 0;
+
+    // 显示 EDFM 裂缝段场数据
+    virtual bool showSegments(bool show) = 0;
     
     // 显示井
     virtual bool showWells(bool show) = 0;
@@ -113,8 +140,11 @@ public:
     // 设置压力场颜色范围
     virtual bool setPressureRange(double min, double max) = 0;
     
-    // 设置饱和度颜色范围
-    virtual bool setSaturationRange(double min, double max) = 0;
+    // 设置含水饱和度颜色范围
+    virtual bool setWaterSaturationRange(double min, double max) = 0;
+
+    // 设置含气饱和度颜色范围
+    virtual bool setGasSaturationRange(double min, double max) = 0;
     
     // 重置视图
     virtual bool resetView() = 0;
