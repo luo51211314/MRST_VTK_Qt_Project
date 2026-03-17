@@ -43,6 +43,8 @@
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
 #include <Eigen/SparseLU>
+#include <Eigen/IterativeLinearSolvers>
+#include <unsupported/Eigen/AutoDiff>
 
 using namespace std;
 using namespace Eigen;
@@ -108,7 +110,7 @@ static inline double distAABB_AABB(const AABB& a, const AABB& b) {
 struct Fracture {
     int id{};
     Point3 vertices[4];
-    double aperture{0.001};
+    double aperture{0.01};
     double perm{10000.0};
 };
 
@@ -148,7 +150,7 @@ struct Segment {
     double area{0.0};
     Point3 center{};
     Point3 normal{};
-    double aperture{0.001};
+    double aperture{0.01};
     double perm{10000.0};
     double T_mf{0.0};
 };
@@ -322,6 +324,9 @@ static double dbarCellQuad(const AABB& cell, const Fracture& f, int nsx, int nsy
 // 5. Fluid props (same style as your original code)
 // =============================================================================
 
+typedef Eigen::Matrix<double, 3, 1> Deriv3;
+typedef Eigen::AutoDiffScalar<Deriv3> AD3;
+
 struct FluidProps {
     double mu_w = 1.0;
     double mu_o = 5.0;
@@ -337,29 +342,60 @@ struct FluidProps {
 
 static FluidProps g_props;
 
-static void calcPVT(double P, double& Bw, double& Bo, double& Bg, double& dBw_dP, double& dBo_dP, double& dBg_dP) {
-    double dP = P - g_props.P_ref;
-    Bw = std::exp(-g_props.cw * dP);
-    Bo = std::exp(-g_props.co * dP);
-    Bg = std::exp(-g_props.cg * dP);
+template <typename T>
+static void calcPVT(const T& P, T& Bw, T& Bo, T& Bg, T& dBw_dP, T& dBo_dP, T& dBg_dP) {
+    T dP = P - g_props.P_ref;
+    using std::exp;
+    Bw = exp(-g_props.cw * dP);
+    Bo = exp(-g_props.co * dP);
+    Bg = exp(-g_props.cg * dP);
 }
 
-static void calcRelPerm(double Sw, double Sg, double& krw, double& kro, double& krg) {
-    double Sw_norm = (Sw - g_props.Swi) / (1.0 - g_props.Swi - g_props.Sor);
-    double Sg_norm = (Sg - g_props.Sgc) / (1.0 - g_props.Sgc - g_props.Swi - g_props.Sor);
-    Sw_norm = clamp01(Sw_norm);
-    Sg_norm = clamp01(Sg_norm);
-    krw = std::pow(Sw_norm, 2.0);
-    krg = std::pow(Sg_norm, 2.0);
-    double So_norm = clamp01(1.0 - Sw_norm - Sg_norm);
-    kro = std::pow(So_norm, 2.0);
+template <typename T>
+static void calcRelPerm(const T& Sw, const T& Sg, T& krw, T& kro, T& krg) {
+    auto clamp01_T = [](const T& v) -> T {
+        T zero(0.0), one(1.0);
+        return (v < zero) ? zero : ((v > one) ? one : v);
+    };
+    T Sw_norm = (Sw - g_props.Swi) / (1.0 - g_props.Swi - g_props.Sor);
+    T Sg_norm = (Sg - g_props.Sgc) / (1.0 - g_props.Sgc - g_props.Swi - g_props.Sor);
+    Sw_norm = clamp01_T(Sw_norm);
+    Sg_norm = clamp01_T(Sg_norm);
+    
+    krw = Sw_norm * Sw_norm;
+    krg = Sg_norm * Sg_norm;
+    T So_norm = clamp01_T(T(1.0) - Sw_norm - Sg_norm);
+    kro = So_norm * So_norm;
 }
 
-struct State {
-    double P{200.0};
-    double Sw{0.2};
-    double Sg{0.05};
+template <typename T>
+struct StateT {
+    T P{200.0};
+    T Sw{0.2};
+    T Sg{0.05};
 };
+
+template <typename T>
+struct PropertiesT {
+    T Bw, Bo, Bg;
+    T krw, kro, krg;
+    T lw, lo, lg;
+};
+
+typedef StateT<double> State;
+typedef StateT<AD3> StateAD3;
+
+template <typename T>
+PropertiesT<T> getProps(const StateT<T>& s) {
+    PropertiesT<T> p;
+    T dummy;
+    calcPVT(s.P, p.Bw, p.Bo, p.Bg, dummy, dummy, dummy);
+    calcRelPerm(s.Sw, s.Sg, p.krw, p.kro, p.krg);
+    p.lw = p.krw / (g_props.mu_w * p.Bw);
+    p.lo = p.kro / (g_props.mu_o * p.Bo);
+    p.lg = p.krg / (g_props.mu_g * p.Bg);
+    return p;
+}
 
 // =============================================================================
 // 6. Simulator with LGR
@@ -369,7 +405,7 @@ class SimulatorLGR {
 public:
     // Domain
     int Nx{20}, Ny{10}, Nz{2};           // SAFE default for "runnable" LGR
-    double Lx{1000}, Ly{500}, Lz{50};
+    double Lx{1000}, Ly{500}, Lz{100};
     double dx{}, dy{}, dz{};
 
     // LGR config
@@ -409,6 +445,12 @@ public:
     std::vector<Well> wells;
     std::unordered_map<int,int> well_map;
 
+    SparseMatrix<double> J;
+    struct CellOffsets { int diag[3][3]; };
+    struct ConnOffsets { int off_uv[3][3]; int off_vu[3][3]; };
+    std::vector<CellOffsets> cell_J_idx;
+    std::vector<ConnOffsets> conn_J_idx;
+
     SimulatorLGR() {
         dx = Lx / Nx; dy = Ly / Ny; dz = Lz / Nz;
     }
@@ -431,7 +473,7 @@ public:
                     pc.center = {(i+0.5)*dx, (j+0.5)*dy, (k+0.5)*dz};
                     pc.vol = dx*dy*dz;
                     pc.phi = 0.2;
-                    pc.K[0]=0.001; pc.K[1]=0.001; pc.K[2]=0.0001;
+                    pc.K[0]=0.0001; pc.K[1]=0.0001; pc.K[2]=0.0001;
                     pc.depth = pc.center.z;
                     pc.box = makeAABBFromCenterSize(pc.center, dx, dy, dz);
                     pc.refined = false;
@@ -449,7 +491,7 @@ public:
                            double min_L = 30.0, double max_L = 80.0, 
                            double max_dip = PI/3.0, 
                            double min_strike = 0.0, double max_strike = PI,
-                           double aperture_val = 0.001, double perm_val = 10000.0,
+                           double aperture_val = 0.01, double perm_val = 10000.0,
                            double range_x_min = 0.0, double range_x_max = -1.0,
                            double range_y_min = 0.0, double range_y_max = -1.0,
                            double range_z_min = 0.0, double range_z_max = -1.0) {
@@ -511,7 +553,7 @@ public:
         double offsets[3] = {-100.1, 0.1, 100.1};
         double hf_len=200.0, hf_height=40.0;
         for(int k=0; k<3; ++k) {
-            Fracture f; f.id = 100 + k; f.aperture = 0.001; f.perm = 10000.0;
+            Fracture f; f.id = 100 + k; f.aperture = 0.01; f.perm = 10000.0;
             double x_curr = xc + offsets[k];
             f.vertices[0] = {x_curr, yc - hf_len/2, zc - hf_height/2};
             f.vertices[1] = {x_curr, yc + hf_len/2, zc - hf_height/2};
@@ -524,7 +566,7 @@ public:
     void generateHydraulicFractures(int total_fracs = 0,
                                     double strike_val = PI / 2.0, double dip_val = PI / 2.0,
                                     double length_val = 200.0, double height_val = 40.0,
-                                    double aperture_val = 0.001, double perm_val = 10000.0,
+                                    double aperture_val = 0.01, double perm_val = 10000.0,
                                     double range_x_min = 0.0, double range_x_max = -1.0,
                                     double range_y_min = 0.0, double range_y_max = -1.0,
                                     double range_z_min = 0.0, double range_z_max = -1.0,
@@ -1243,82 +1285,137 @@ public:
         states_prev = states;
     }
 
+    void buildJacobianPattern() {
+        J.resize(3*n_total, 3*n_total);
+        std::vector<Triplet<double>> trips;
+        trips.reserve(n_total * 9 + connections.size() * 18);
+
+        for(int i=0; i<n_total; ++i) {
+            for(int eq=0; eq<3; ++eq) {
+                for(int var=0; var<3; ++var) {
+                    trips.emplace_back(3*i+eq, 3*i+var, 0.0);
+                }
+            }
+        }
+        for(const auto& conn : connections) {
+            int u = conn.u, v = conn.v;
+            for(int eq=0; eq<3; ++eq) {
+                for(int var=0; var<3; ++var) {
+                    trips.emplace_back(3*u+eq, 3*v+var, 0.0);
+                    trips.emplace_back(3*v+eq, 3*u+var, 0.0);
+                }
+            }
+        }
+        
+        J.setFromTriplets(trips.begin(), trips.end());
+        J.makeCompressed();
+
+        auto get_val_idx = [&](int r, int c) -> int {
+            int col_start = J.outerIndexPtr()[c];
+            int col_end   = J.outerIndexPtr()[c+1];
+            for (int k = col_start; k < col_end; ++k) {
+                if (J.innerIndexPtr()[k] == r) return k;
+            }
+            return -1;
+        };
+
+        cell_J_idx.resize(n_total);
+        for(int i=0; i<n_total; ++i) {
+            for(int eq=0; eq<3; ++eq) {
+                for(int var=0; var<3; ++var) {
+                    cell_J_idx[i].diag[eq][var] = get_val_idx(3*i+eq, 3*i+var);
+                }
+            }
+        }
+
+        conn_J_idx.resize(connections.size());
+        for(size_t i=0; i<connections.size(); ++i) {
+            int u = connections[i].u;
+            int v = connections[i].v;
+            for(int eq=0; eq<3; ++eq) {
+                for(int var=0; var<3; ++var) {
+                    conn_J_idx[i].off_uv[eq][var] = get_val_idx(3*u+eq, 3*v+var);
+                    conn_J_idx[i].off_vu[eq][var] = get_val_idx(3*v+eq, 3*u+var);
+                }
+            }
+        }
+        std::cout << "Jacobian static pattern built. Nonzeros: " << J.nonZeros() << std::endl;
+    }
+
     // ---------------------------------------------------------------------
     // 6.12 Residual (same structure as your original, but leaf-based)
     // ---------------------------------------------------------------------
-    struct Properties {
-        double Bw, Bo, Bg;
-        double krw, kro, krg;
-        double lw, lo, lg;
-    };
 
-    Properties getProps(const State& s) const {
-        Properties p;
-        double dummy;
-        calcPVT(s.P, p.Bw, p.Bo, p.Bg, dummy, dummy, dummy);
-        calcRelPerm(s.Sw, s.Sg, p.krw, p.kro, p.krg);
-        p.lw = p.krw / (g_props.mu_w * p.Bw);
-        p.lo = p.kro / (g_props.mu_o * p.Bo);
-        p.lg = p.krg / (g_props.mu_g * p.Bg);
-        return p;
+    Eigen::Matrix<AD3, 3, 1> computeAccumulation_AD(double dt, const State& s_old_val, const StateAD3& s_new, const PropertiesT<AD3>& p_new, double vol, double phi) const {
+        StateAD3 s_old;
+        s_old.P.value() = s_old_val.P;    s_old.P.derivatives().setZero();
+        s_old.Sw.value() = s_old_val.Sw;  s_old.Sw.derivatives().setZero();
+        s_old.Sg.value() = s_old_val.Sg;  s_old.Sg.derivatives().setZero();
+
+        PropertiesT<AD3> p_old = getProps(s_old);
+
+        AD3 accum = vol * phi / dt;
+        Eigen::Matrix<AD3, 3, 1> R;
+        R(0) = accum * (s_new.Sw / p_new.Bw - s_old.Sw / p_old.Bw);
+        R(1) = accum * ((AD3(1.0) - s_new.Sw - s_new.Sg) / p_new.Bo - (AD3(1.0) - s_old.Sw - s_old.Sg) / p_old.Bo);
+        R(2) = accum * (s_new.Sg / p_new.Bg - s_old.Sg / p_old.Bg);
+        
+        return R;
     }
 
-    Vector3d computeNodeResidual(int u, double dt,
-                                 const std::vector<State>& curr,
-                                 const std::vector<Properties>& props) const
-    {
-        Vector3d R = Vector3d::Zero();
-
-        double vol = 0.0;
-        double phi = 1.0;
-        if (u < n_leaf) {
-            vol = leaves[u].vol;
-            phi = leaves[u].phi;
-        } else {
-            int s = u - n_leaf;
-            vol = segments[s].area * segments[s].aperture;
-            phi = 1.0;
-        }
-        double accum = vol * phi / dt;
-
-        const State& s_new = curr[u];
-        const State& s_old = states_prev[u];
-        const Properties& p_new = props[u];
-        Properties p_old = getProps(s_old);
-
-        // Water
-        R(0) = accum * (s_new.Sw / p_new.Bw - s_old.Sw / p_old.Bw);
-        // Oil
-        double So_new = 1.0 - s_new.Sw - s_new.Sg;
-        double So_old = 1.0 - s_old.Sw - s_old.Sg;
-        R(1) = accum * (So_new / p_new.Bo - So_old / p_old.Bo);
-        // Gas
-        R(2) = accum * (s_new.Sg / p_new.Bg - s_old.Sg / p_old.Bg);
-
-        // Flux
-        for (const auto& nb : adj[u]) {
-            int v = nb.v;
-            double T = nb.T;
-            double dP = curr[u].P - curr[v].P;
-            const Properties& pup = (dP >= 0.0) ? props[u] : props[v];
-            R(0) += T * pup.lw * dP;
-            R(1) += T * pup.lo * dP;
-            R(2) += T * pup.lg * dP;
-        }
-
-        // Wells (producer only)
-        auto it = well_map.find(u);
-        if (it != well_map.end()) {
-            const Well& w = wells[it->second];
-            double dP = curr[u].P - w.P_bhp;
-            if (dP > 0.0) {
-                const Properties& pu = props[u];
-                R(0) += w.WI * pu.lw * dP;
-                R(1) += w.WI * pu.lo * dP;
-                R(2) += w.WI * pu.lg * dP;
-            }
+    Eigen::Matrix<AD3, 3, 1> computeWell_AD(const Well& w, const StateAD3& s_new, const PropertiesT<AD3>& pu) const {
+        Eigen::Matrix<AD3, 3, 1> R;
+        R(0) = AD3(0.0); R(1) = AD3(0.0); R(2) = AD3(0.0);
+        
+        AD3 dP = s_new.P - w.P_bhp;
+        if (dP.value() > 0.0) {
+            R(0) = w.WI * pu.lw * dP;
+            R(1) = w.WI * pu.lo * dP;
+            R(2) = w.WI * pu.lg * dP;
         }
         return R;
+    }
+
+    struct FluxAD {
+        double val[3];
+        Eigen::Vector3d d_du[3];
+        Eigen::Vector3d d_dv[3];
+    };
+
+    FluxAD computeFlux_FastAD(double T_trans, const StateAD3& su, const StateAD3& sv, const PropertiesT<AD3>& pu, const PropertiesT<AD3>& pv) const {
+        FluxAD res;
+        double dP_val = su.P.value() - sv.P.value();
+        bool u_is_upwind = (dP_val >= 0.0);
+
+        AD3 dP_u = su.P - sv.P.value(); 
+        AD3 dP_v = su.P.value() - sv.P; 
+
+        if (u_is_upwind) {
+            AD3 Fu0 = T_trans * pu.lw * dP_u;
+            AD3 Fu1 = T_trans * pu.lo * dP_u;
+            AD3 Fu2 = T_trans * pu.lg * dP_u;
+
+            res.val[0] = Fu0.value(); res.d_du[0] = Fu0.derivatives();
+            res.val[1] = Fu1.value(); res.d_du[1] = Fu1.derivatives();
+            res.val[2] = Fu2.value(); res.d_du[2] = Fu2.derivatives();
+
+            res.d_dv[0] = T_trans * pu.lw.value() * dP_v.derivatives();
+            res.d_dv[1] = T_trans * pu.lo.value() * dP_v.derivatives();
+            res.d_dv[2] = T_trans * pu.lg.value() * dP_v.derivatives();
+        } else {
+            AD3 Fv0 = T_trans * pv.lw * dP_v;
+            AD3 Fv1 = T_trans * pv.lo * dP_v;
+            AD3 Fv2 = T_trans * pv.lg * dP_v;
+
+            res.val[0] = Fv0.value(); res.d_dv[0] = Fv0.derivatives();
+            res.val[1] = Fv1.value(); res.d_dv[1] = Fv1.derivatives();
+            res.val[2] = Fv2.value(); res.d_dv[2] = Fv2.derivatives();
+
+            res.d_du[0] = T_trans * pv.lw.value() * dP_u.derivatives();
+            res.d_du[1] = T_trans * pv.lo.value() * dP_u.derivatives();
+            res.d_du[2] = T_trans * pv.lg.value() * dP_u.derivatives();
+        }
+        return res;
     }
 
     // ---------------------------------------------------------------------
@@ -1330,26 +1427,81 @@ public:
         const double tol = 1e-3;
 
         std::vector<State> backup = states;
-        std::vector<Properties> props_cache(n_total);
+        
+        std::vector<StateAD3> states_ad(n_total);
+        std::vector<PropertiesT<AD3>> props_ad(n_total);
 
         for (int iter=0; iter<max_iter; ++iter) {
             actual_iter = iter + 1;
-            for (int i=0; i<n_total; ++i) props_cache[i] = getProps(states[i]);
 
             VectorXd Rg(3*n_total);
-            double max_res = 0.0;
-            for (int i=0; i<n_total; ++i) {
-                Vector3d r = computeNodeResidual(i, dt, states, props_cache);
-                Rg.segment<3>(3*i) = r;
-                max_res = std::max(max_res, r.lpNorm<Infinity>());
+            Rg.setZero();
+            
+            std::fill(J.valuePtr(), J.valuePtr() + J.nonZeros(), 0.0);
+
+            for (int i = 0; i < n_total; ++i) {
+                states_ad[i].P.value() = states[i].P;    states_ad[i].P.derivatives()  = Eigen::Vector3d::Unit(0);
+                states_ad[i].Sw.value() = states[i].Sw;  states_ad[i].Sw.derivatives() = Eigen::Vector3d::Unit(1);
+                states_ad[i].Sg.value() = states[i].Sg;  states_ad[i].Sg.derivatives() = Eigen::Vector3d::Unit(2);
+                props_ad[i] = getProps(states_ad[i]);
             }
+
+            for (int i=0; i<n_total; ++i) {
+                double vol = (i < n_leaf) ? leaves[i].vol : (segments[i - n_leaf].area * segments[i - n_leaf].aperture);
+                double phi = (i < n_leaf) ? leaves[i].phi : 1.0;
+                
+                auto R_acc = computeAccumulation_AD(dt, states_prev[i], states_ad[i], props_ad[i], vol, phi);
+                
+                auto it = well_map.find(i);
+                if (it != well_map.end()) {
+                    auto R_well = computeWell_AD(wells[it->second], states_ad[i], props_ad[i]);
+                    R_acc(0) += R_well(0);
+                    R_acc(1) += R_well(1);
+                    R_acc(2) += R_well(2);
+                }
+
+                for (int eq = 0; eq < 3; ++eq) {
+                    Rg(3*i + eq) += R_acc(eq).value();
+                    Deriv3 derivs = R_acc(eq).derivatives();
+                    for(int var = 0; var < 3; ++var) {
+                        J.valuePtr()[cell_J_idx[i].diag[eq][var]] += derivs(var);
+                    }
+                }
+            }
+
+            for (size_t c_idx = 0; c_idx < connections.size(); ++c_idx) {
+                const auto& conn = connections[c_idx];
+                int u = conn.u;
+                int v = conn.v;
+                
+                auto F_uv = computeFlux_FastAD(conn.T, states_ad[u], states_ad[v], props_ad[u], props_ad[v]);
+                
+                for (int eq = 0; eq < 3; ++eq) {
+                    Rg(3*u + eq) += F_uv.val[eq];
+                    Rg(3*v + eq) -= F_uv.val[eq];
+                    
+                    for (int var = 0; var < 3; ++var) {
+                        double dF_dXu = F_uv.d_du[eq](var);
+                        double dF_dXv = F_uv.d_dv[eq](var);
+                        
+                        J.valuePtr()[cell_J_idx[u].diag[eq][var]] += dF_dXu;
+                        J.valuePtr()[conn_J_idx[c_idx].off_vu[eq][var]] -= dF_dXu;
+                        
+                        J.valuePtr()[conn_J_idx[c_idx].off_uv[eq][var]] += dF_dXv;
+                        J.valuePtr()[cell_J_idx[v].diag[eq][var]] -= dF_dXv;
+                    }
+                }
+            }
+
+            double max_res = Rg.lpNorm<Infinity>();
+
             if (max_res < tol) {
                 // production
                 for (const auto& w : wells) {
                     int u = w.target_node_idx;
                     double dP = states[u].P - w.P_bhp;
                     if (dP > 0.0) {
-                        const auto& pu = props_cache[u];
+                        PropertiesT<double> pu = getProps(states[u]);
                         step_water += w.WI * pu.lw * dP * dt;
                         step_oil   += w.WI * pu.lo * dP * dt;
                         step_gas   += w.WI * pu.lg * dP * dt;
@@ -1358,124 +1510,111 @@ public:
                 return true;
             }
 
-            // Jacobian by finite difference (only local affected nodes)
-            std::vector<Triplet<double>> trips;
-            trips.reserve((size_t)n_total * 60);
-
-            const double epsP = 1e-6;
-            const double epsS = 1e-6;
-
-            for (int u=0; u<n_total; ++u) {
-                State orig = states[u];
-                Properties prop_orig = props_cache[u];
-
-                std::vector<int> affected;
-                affected.reserve(adj[u].size() + 1);
-                affected.push_back(u);
-                for (const auto& nb : adj[u]) affected.push_back(nb.v);
-                std::sort(affected.begin(), affected.end());
-                affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
-
-                std::vector<Vector3d> base(affected.size());
-                for (size_t k=0;k<affected.size();++k) {
-                    base[k] = Rg.segment<3>(3*affected[k]);
-                }
-
-                for (int var=0; var<3; ++var) {
-                    double eps = (var==0) ? epsP : epsS;
-                    if (var==0) states[u].P += eps;
-                    else if (var==1) states[u].Sw += eps;
-                    else states[u].Sg += eps;
-
-                    props_cache[u] = getProps(states[u]);
-                    for (size_t k=0;k<affected.size();++k) {
-                        int row = affected[k];
-                        Vector3d rnew = computeNodeResidual(row, dt, states, props_cache);
-                        Vector3d diff = (rnew - base[k]) / eps;
-                        for (int eq=0; eq<3; ++eq) {
-                            double v = diff(eq);
-                            if (std::abs(v) > 1e-20) trips.emplace_back(3*row + eq, 3*u + var, v);
-                        }
-                    }
-
-                    states[u] = orig;
-                    props_cache[u] = prop_orig;
-                }
-            }
-
             if (iter == 0) {
                 std::ofstream jac_file("jacobian_sparsity.csv");
                 jac_file << "row,col,val\n";
-                for (const auto& t : trips) {
-                    if (std::abs(t.value()) > 1e-12) {
-                        jac_file << t.row() << "," << t.col() << "," << t.value() << "\n";
+                for (int k = 0; k < J.outerSize(); ++k) {
+                    for (SparseMatrix<double>::InnerIterator it(J, k); it; ++it) {
+                        if (std::abs(it.value()) > 1e-12) {
+                            jac_file << it.row() << "," << it.col() << "," << it.value() << "\n";
+                        }
                     }
                 }
                 jac_file.close();
             }
 
-            SparseMatrix<double> J(3*n_total, 3*n_total);
-            J.setFromTriplets(trips.begin(), trips.end());
+            std::cout << "\n      [Newton Iter " << iter+1 << "] 计算ILU预条件子..." << std::flush;
 
-            SparseLU<SparseMatrix<double>> solver;
-            solver.analyzePattern(J);
-            solver.factorize(J);
+            BiCGSTAB<SparseMatrix<double>, IncompleteLUT<double>> solver;
+            solver.preconditioner().setDroptol(1e-5);
+            solver.preconditioner().setFillfactor(40);
+            solver.setTolerance(1e-5);
+            solver.setMaxIterations(500);
+            
+            solver.compute(J);
             if (solver.info() != Success) {
+                std::cout << " ILU分解失败!" << std::endl;
                 states = backup;
                 return false;
             }
+            
+            std::cout << "完成! 求解线性方程组..." << std::flush;
             VectorXd delta = solver.solve(-Rg);
+            
+            if (solver.info() != Success) {
+                std::cout << " 求解失败! (迭代次数: " << solver.iterations() << ")" << std::endl;
+                states = backup;
+                return false;
+            } else {
+                std::cout << "成功! (迭代次数: " << solver.iterations() << ", 误差: " << solver.error() << ")" << std::endl;
+            }
 
             std::vector<State> states_before_ls = states;
-            double norm_old = Rg.norm();
             double alpha = 1.0;
-            bool accepted = false;
 
-            for(int ls = 0; ls < 3; ++ls) {
-                double damping = 1.0;
-                double maxDP = 0.0, maxDS = 0.0;
-                for(int i=0; i<n_total; ++i) {
-                    maxDP = std::max(maxDP, std::abs(delta(3*i+0) * alpha));
-                    maxDS = std::max(maxDS, std::abs(delta(3*i+1) * alpha));
-                    maxDS = std::max(maxDS, std::abs(delta(3*i+2) * alpha));
+            for(int i=0; i<n_total; ++i) {
+                double dP_new  = delta(3*i+0) * alpha;
+                double dSw_new = delta(3*i+1) * alpha;
+                double dSg_new = delta(3*i+2) * alpha;
+
+                double lw = props_ad[i].lw.value();
+                double lo = props_ad[i].lo.value();
+                double lg = props_ad[i].lg.value();
+                double lt = std::max(1e-20, lw + lo + lg);
+
+                double dlw_dSw = props_ad[i].lw.derivatives()(1);
+                double dlo_dSw = props_ad[i].lo.derivatives()(1);
+                double dlg_dSw = props_ad[i].lg.derivatives()(1);
+                double dlt_dSw = dlw_dSw + dlo_dSw + dlg_dSw;
+
+                double dlw_dSg = props_ad[i].lw.derivatives()(2);
+                double dlo_dSg = props_ad[i].lo.derivatives()(2);
+                double dlg_dSg = props_ad[i].lg.derivatives()(2);
+                double dlt_dSg = dlw_dSg + dlo_dSg + dlg_dSg;
+
+                double dfw_dSw = (dlw_dSw * lt - lw * dlt_dSw) / (lt * lt);
+                double dfg_dSg = (dlg_dSg * lt - lg * dlt_dSg) / (lt * lt);
+
+                const double F_tol = 0.15; 
+                double omega_w = 1.0;
+                double omega_g = 1.0;
+
+                if (std::abs(dfw_dSw * dSw_new) > F_tol) {
+                    omega_w = F_tol / std::max(1e-12, std::abs(dfw_dSw * dSw_new));
                 }
-                if (maxDP > 20.0) damping = std::min(damping, 20.0 / maxDP);
-                if (maxDS > 0.1)  damping = std::min(damping, 0.1 / maxDS);
-
-                for(int i=0; i<n_total; ++i) {
-                    states[i].P  = states_before_ls[i].P  + delta(3*i+0) * damping * alpha;
-                    states[i].Sw = states_before_ls[i].Sw + delta(3*i+1) * damping * alpha;
-                    states[i].Sg = states_before_ls[i].Sg + delta(3*i+2) * damping * alpha;
-                    
-                    states[i].P = std::max(1.0, states[i].P);
-                    states[i].Sw = clamp01(states[i].Sw);
-                    states[i].Sg = clamp01(states[i].Sg);
-                    if (states[i].Sw + states[i].Sg > 1.0) {
-                        double ssum = states[i].Sw + states[i].Sg;
-                        states[i].Sw /= ssum;
-                        states[i].Sg /= ssum;
-                    }
+                if (std::abs(dfg_dSg * dSg_new) > F_tol) {
+                    omega_g = F_tol / std::max(1e-12, std::abs(dfg_dSg * dSg_new));
                 }
 
-                double norm_new = 0;
-                for(int i=0; i<n_total; ++i) {
-                    props_cache[i] = getProps(states[i]);
-                    norm_new += computeNodeResidual(i, dt, states, props_cache).squaredNorm();
-                }
-                norm_new = std::sqrt(norm_new);
+                double omega_appleyard = std::min(omega_w, omega_g);
 
-                if (norm_new < norm_old || iter == 0) {
-                    accepted = true;
-                    break;
-                } else {
-                    alpha *= 0.5;
-                    states = states_before_ls;
-                }
-            }
+                const double MAX_DP = 50.0;
+                const double MAX_DS = 0.20;
 
-            if (!accepted && iter > 0) {
-                states = backup;
-                return false;
+                double omega_P = (std::abs(dP_new) > MAX_DP) ? (MAX_DP / std::abs(dP_new)) : 1.0;
+                
+                double dSw_chopped = dSw_new * omega_appleyard;
+                double dSg_chopped = dSg_new * omega_appleyard;
+                
+                double omega_S = 1.0;
+                if (std::abs(dSw_chopped) > MAX_DS) omega_S = std::min(omega_S, MAX_DS / std::abs(dSw_chopped));
+                if (std::abs(dSg_chopped) > MAX_DS) omega_S = std::min(omega_S, MAX_DS / std::abs(dSg_chopped));
+
+                double omega_final = std::min({omega_appleyard, omega_P, omega_S});
+
+                states[i].P  = states_before_ls[i].P  + dP_new * omega_final;
+                states[i].Sw = states_before_ls[i].Sw + dSw_new * omega_final;
+                states[i].Sg = states_before_ls[i].Sg + dSg_new * omega_final;
+
+                states[i].P = std::max(14.7, states[i].P);
+                states[i].Sw = clamp01(states[i].Sw);
+                states[i].Sg = clamp01(states[i].Sg);
+                
+                if (states[i].Sw + states[i].Sg > 1.0 - 1e-6) {
+                    double ssum = states[i].Sw + states[i].Sg;
+                    states[i].Sw /= ssum;
+                    states[i].Sg /= ssum;
+                }
             }
         }
 
@@ -1650,6 +1789,7 @@ public:
 
         setupWells();
         initState();
+        buildJacobianPattern();
     }
 };
 
